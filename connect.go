@@ -9,10 +9,16 @@ package tru
 import (
 	"errors"
 	"net"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
 )
+
+type connect struct {
+	connects map[string]*connectData // Connections map
+	m        sync.RWMutex            // Connections maps mutex
+}
 
 type connectData struct {
 	uuid string
@@ -31,8 +37,8 @@ func (tru *Tru) Connect(addr string, reader ...ReaderFunc) (ch *Channel, err err
 	}
 
 	// Create wait connection channel and save connection data to map
-	wch := tru.addConnect(uuid)
-	defer tru.deleteConnect(uuid)
+	wch := tru.connect.add(uuid)
+	defer tru.connect.delete(uuid)
 	defer close(wch)
 
 	// Send connect message
@@ -42,7 +48,7 @@ func (tru *Tru) Connect(addr string, reader ...ReaderFunc) (ch *Channel, err err
 	}
 
 	// Wait answer to connect message or timeout
-	ch, err = tru.waitConnect(wch)
+	ch, err = tru.connect.wait(wch)
 	if err != nil {
 		return
 	}
@@ -54,8 +60,8 @@ func (tru *Tru) Connect(addr string, reader ...ReaderFunc) (ch *Channel, err err
 	return
 }
 
-// waitConnect channel connected or timeout
-func (tru *Tru) waitConnect(wch chan *connectData) (ch *Channel, err error) {
+// wait channel connected or timeout
+func (c *connect) wait(wch chan *connectData) (ch *Channel, err error) {
 	select {
 	case cd := <-wch:
 		ch = cd.ch
@@ -66,32 +72,32 @@ func (tru *Tru) waitConnect(wch chan *connectData) (ch *Channel, err error) {
 	}
 }
 
-// addConnect add connection data to connections map
-func (tru *Tru) addConnect(uuid string) (wch chan *connectData) {
-	tru.m.Lock()
-	defer tru.m.Unlock()
+// add add connection data to connections map
+func (c *connect) add(uuid string) (wch chan *connectData) {
+	c.m.Lock()
+	defer c.m.Unlock()
 	wch = make(chan *connectData)
-	tru.connects[uuid] = &connectData{uuid, wch, nil}
+	c.connects[uuid] = &connectData{uuid, wch, nil}
 	return
 }
 
-// deleteConnect delete connection data from connections map
-func (tru *Tru) deleteConnect(uuid string) {
-	tru.m.Lock()
-	defer tru.m.Unlock()
-	delete(tru.connects, uuid)
+// delete delete connection data from connections map
+func (c *connect) delete(uuid string) {
+	c.m.Lock()
+	defer c.m.Unlock()
+	delete(c.connects, uuid)
 }
 
-// getConnect get connection data from connections map
-func (tru *Tru) getConnect(uuid string) (cd *connectData, ok bool) {
-	tru.m.RLock()
-	defer tru.m.RUnlock()
-	cd, ok = tru.connects[uuid]
+// get get connection data from connections map
+func (c *connect) get(uuid string) (cd *connectData, ok bool) {
+	c.m.RLock()
+	defer c.m.RUnlock()
+	cd, ok = c.connects[uuid]
 	return
 }
 
-// serveConnect process connect packets
-func (tru *Tru) serveConnect(addr net.Addr, pac *Packet) (err error) {
+// serve process connect packets
+func (c *connect) serve(tru *Tru, addr net.Addr, pac *Packet) (err error) {
 	switch pac.Status() {
 
 	case statusConnect:
@@ -108,7 +114,7 @@ func (tru *Tru) serveConnect(addr net.Addr, pac *Packet) (err error) {
 		err = tru.writeTo(data, ch.addr)
 
 	case statusConnectAnswer:
-		cd, ok := tru.getConnect(string(pac.Data()))
+		cd, ok := c.get(string(pac.Data()))
 		if !ok {
 			err = errors.New("wrong connect answer packet")
 			return

@@ -34,12 +34,13 @@ func (ch *Channel) WriteTo(data []byte) (err error) {
 }
 
 // newID create new channels packet id
-func (tru *Tru) newID(ch *Channel) (id int) {
-	tru.m.Lock()
-	defer tru.m.Unlock()
+func (ch *Channel) newID() (id int) {
+	ch.tru.m.Lock()
+	defer ch.tru.m.Unlock()
 
 	id = int(ch.id)
 	ch.id++
+
 	return
 }
 

@@ -21,6 +21,7 @@ func main() {
 
 	// Parse flags
 	flag.Parse()
+	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
 
 	// Create server connection and start listen incominng packets
 	t, err := tru.New(*port, Reader)

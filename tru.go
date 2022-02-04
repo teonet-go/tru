@@ -13,13 +13,13 @@ import (
 )
 
 type Tru struct {
-	conn     net.PacketConn          // Local connection
-	cannels  map[string]*Channel     // Channels map
-	connects map[string]*connectData // Connections map
-	reader   ReaderFunc              // Global tru reader
-	readerCh chan readerChData       // Reader channel
-	senderCh chan senderChData       // Sender channel
-	m        sync.RWMutex            // Maps mutex
+	conn     net.PacketConn      // Local connection
+	cannels  map[string]*Channel // Channels map
+	reader   ReaderFunc          // Global tru reader
+	readerCh chan readerChData   // Reader channel
+	senderCh chan senderChData   // Sender channel
+	connect  connect             // Connect methods receiver
+	m        sync.RWMutex        // Channels map mutex
 }
 
 // New create new tru object and start listen udp packets
@@ -28,7 +28,7 @@ func New(port int, reader ...ReaderFunc) (tru *Tru, err error) {
 	// Create tru object
 	tru = new(Tru)
 	tru.cannels = make(map[string]*Channel)
-	tru.connects = make(map[string]*connectData)
+	tru.connect.connects = make(map[string]*connectData)
 	tru.conn, err = net.ListenPacket("udp", ":"+strconv.Itoa(port))
 	if err != nil {
 		return
@@ -115,7 +115,7 @@ func (tru *Tru) serve(n int, addr net.Addr, data []byte) {
 	if !ok {
 		// Got packet from new channel
 		log.Printf("got packet %d from new channel %s, data: %s\n", n, addr.String(), pac.Data())
-		tru.serveConnect(addr, pac)
+		tru.connect.serve(tru, addr, pac)
 		return
 	}
 
@@ -159,7 +159,7 @@ func (tru *Tru) senderProccess() {
 	for r := range tru.senderCh {
 
 		// Create data packet
-		pac, err := tru.newPacket().SetID(tru.newID(r.ch)).SetStatus(statusData).SetData(r.data).MarshalBinary()
+		pac, err := tru.newPacket().SetID(r.ch.newID()).SetStatus(statusData).SetData(r.data).MarshalBinary()
 		if err != nil {
 			return
 		}
