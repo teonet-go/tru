@@ -124,24 +124,24 @@ func (tru *Tru) serve(n int, addr net.Addr, data []byte) {
 
 	case statusPing:
 		ch.writeToPong()
-		ch.stat.setLastActivity()
 
 	case statusPong:
-		ch.stat.setLastActivity()
 
 	case statusAck:
-		tt, _ := ch.setTripTime(pac.ID())
+		tt, err := ch.setTripTime(pac.ID())
+		if err != nil {
+			break
+		}
 		log.Printf("got ack to packet id %d, trip time: %.3f ms", pac.ID(), float64(tt.Microseconds())/1000.0)
 		ch.sendQueue.delete(pac.ID())
-		ch.stat.setLastActivity()
 
 	case statusData:
 		ch.writeToAck(pac)
-		ch.stat.setLastActivity()
 		// Send packet to reader process
 		tru.readerCh <- readerChData{ch, pac, nil}
 	}
 
+	ch.stat.setLastActivity()
 }
 
 type ReaderFunc func(ch *Channel, pac *Packet, err error) (processed bool)
@@ -180,6 +180,10 @@ type senderChData struct {
 // senderProccess process sended tru packets
 func (tru *Tru) senderProccess() {
 	for r := range tru.senderCh {
+
+		if r.ch.stat.destroyed {
+			continue
+		}
 
 		// Create and marshal packet
 		id := r.id

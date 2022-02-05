@@ -125,7 +125,7 @@ func (tru *Tru) newChannel(addr net.Addr, serverMode ...bool) (ch *Channel, err 
 	if len(serverMode) > 0 {
 		ch.serverMode = serverMode[0]
 	}
-	ch.sendQueue.init()
+	ch.sendQueue.init(ch)
 	ch.stat.setLastActivity()
 	ch.stat.checkActivity(
 		// Inactive
@@ -166,6 +166,7 @@ func (tru *Tru) destroyChannel(ch *Channel) {
 	log.Println("channel destroy", ch.addr.String())
 
 	ch.stat.checkActivityTimer.Stop()
+	ch.sendQueue.retransmitTimer.Stop()
 	ch.stat.destroyed = true
 
 	delete(tru.cannels, ch.addr.String())
