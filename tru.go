@@ -121,6 +121,7 @@ func (tru *Tru) serve(n int, addr net.Addr, data []byte) {
 	}
 
 	switch pac.Status() {
+
 	case statusPing:
 		ch.writeToPong()
 		ch.stat.setLastActivity()
@@ -129,7 +130,9 @@ func (tru *Tru) serve(n int, addr net.Addr, data []byte) {
 		ch.stat.setLastActivity()
 
 	case statusAck:
-		log.Println("got ack", pac.ID())
+		tt, _ := ch.setTripTime(pac.ID())
+		log.Printf("got ack to packet id %d, trip time: %.3f ms", pac.ID(), float64(tt.Microseconds())/1000.0)
+		ch.sendQueue.delete(pac.ID())
 		ch.stat.setLastActivity()
 
 	case statusData:
@@ -178,18 +181,24 @@ type senderChData struct {
 func (tru *Tru) senderProccess() {
 	for r := range tru.senderCh {
 
-		// Create data packet
+		// Create and marshal packet
 		id := r.id
 		if r.status == statusData {
 			id = r.ch.newID()
 		}
-		pac, err := tru.newPacket().SetID(id).SetStatus(r.status).SetData(r.data).MarshalBinary()
+		pac := tru.newPacket().SetID(id).SetStatus(r.status).SetData(r.data)
+		data, err := pac.MarshalBinary()
 		if err != nil {
 			return
 		}
 
+		// Add data packet to send queue
+		if r.status == statusData {
+			r.ch.sendQueue.add(pac)
+		}
+
 		// Write packet to addr
 		// tru.conn.WriteTo(pac, r.ch.Addr)
-		tru.writeTo(pac, r.ch.addr)
+		tru.writeTo(data, r.ch.addr)
 	}
 }

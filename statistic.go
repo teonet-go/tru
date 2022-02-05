@@ -14,6 +14,7 @@ type statistic struct {
 	destroyed          bool
 	lastActivity       time.Time
 	checkActivityTimer *time.Timer
+	tripTime           time.Duration
 }
 
 const (
@@ -41,7 +42,7 @@ func (s *statistic) checkActivity(inactive, keepalive func()) {
 		case time.Since(s.lastActivity) > pingInactiveAfter:
 			keepalive()
 		}
-		
+
 		s.checkActivity(inactive, keepalive)
 	})
 }

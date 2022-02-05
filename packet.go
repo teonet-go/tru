@@ -9,12 +9,15 @@ package tru
 import (
 	"bytes"
 	"encoding/binary"
+	"time"
 )
 
 type Packet struct {
-	id     uint16 // Packet ID
-	status uint8  // Packet Type
-	data   []byte // Packet Data
+	id            uint16    // Packet ID
+	status        uint8     // Packet Type
+	data          []byte    // Packet Data
+	time          time.Time // Packet creating time
+	resendAttempt int       // Packet resend attempt
 }
 
 const (
@@ -29,7 +32,7 @@ const (
 
 // newPacket create new empty packet
 func (tru *Tru) newPacket() *Packet {
-	return &Packet{}
+	return &Packet{time: time.Now()}
 }
 
 // MarshalBinary

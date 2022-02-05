@@ -10,6 +10,7 @@ import (
 	"errors"
 	"log"
 	"net"
+	"time"
 )
 
 type Channel struct {
@@ -19,6 +20,7 @@ type Channel struct {
 	expectedID uint16     // Next expected ID
 	reader     ReaderFunc // Channels reader
 	stat       statistic  // Statictic struct and receiver
+	sendQueue  sendQueue  // Send queue
 	tru        *Tru       // Pointer to tru
 }
 
@@ -76,6 +78,18 @@ func (ch *Channel) newID() (id int) {
 	return
 }
 
+// setTripTime calculate return and set trip time to statistic
+func (ch *Channel) setTripTime(id int) (tt time.Duration, err error) {
+	_, pac, ok := ch.sendQueue.get(id)
+	if !ok {
+		err = errors.New("packet not found")
+		return
+	}
+	tt = time.Since(pac.time)
+	ch.stat.tripTime = tt
+	return
+}
+
 // NewChannel create new tru channel by address
 func (tru *Tru) newChannel(addr net.Addr, serverMode ...bool) (ch *Channel, err error) {
 	tru.m.Lock()
@@ -87,6 +101,7 @@ func (tru *Tru) newChannel(addr net.Addr, serverMode ...bool) (ch *Channel, err 
 	if len(serverMode) > 0 {
 		ch.serverMode = serverMode[0]
 	}
+	ch.sendQueue.init()
 	ch.stat.setLastActivity()
 	ch.stat.checkActivity(
 		// Inactive
