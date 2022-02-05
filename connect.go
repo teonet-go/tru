@@ -12,7 +12,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/google/uuid"
+	// "github.com/google/uuid"
+	uuid "github.com/nu7hatch/gouuid"
 )
 
 type connect struct {
@@ -30,7 +31,10 @@ type connectData struct {
 func (tru *Tru) Connect(addr string, reader ...ReaderFunc) (ch *Channel, err error) {
 
 	// Create uuid and connect packet
-	uuid := uuid.New().String()
+	// uuid := uuid.New().String()
+	u, _ := uuid.NewV4()
+	uuid := u.String()
+
 	pac, err := tru.newPacket().SetStatus(statusConnect).SetData([]byte(uuid)).MarshalBinary()
 	if err != nil {
 		return
