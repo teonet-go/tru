@@ -112,15 +112,17 @@ func (tru *Tru) serve(n int, addr net.Addr, data []byte) {
 
 	// Get channel
 	ch, ok := tru.getChannel(addr.String())
-	if !ok {
+	if !ok || pac.Status() == statusConnect {
 		// Got packet from new channel
-		log.Printf("got packet %d from new channel %s, data: %s\n", n, addr.String(), pac.Data())
+		tru.destroyChannel(ch)
+		// log.Printf("got packet %d from new channel %s, data: %s\n", n, addr.String(), pac.Data())
 		tru.connect.serve(tru, addr, pac)
 		return
 	}
 
 	// Send packet to reader process
 	tru.readerCh <- readerChData{ch, pac, nil}
+	ch.stat.setLastActivity()
 }
 
 type ReaderFunc func(ch *Channel, pac *Packet, err error) (processed bool)

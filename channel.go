@@ -7,6 +7,7 @@
 package tru
 
 import (
+	"errors"
 	"log"
 	"net"
 )
@@ -17,6 +18,7 @@ type Channel struct {
 	id         uint16     // Next send ID
 	expectedID uint16     // Next expected ID
 	reader     ReaderFunc // Channels reader
+	stat       statistic  // Statictic struct and receiver
 	tru        *Tru       // Pointer to tru
 }
 
@@ -29,6 +31,10 @@ func (ch *Channel) Addr() net.Addr {
 
 // WriteTo writes a packet with data to channel
 func (ch *Channel) WriteTo(data []byte) (err error) {
+	if ch.stat.destroyed {
+		err = errors.New("channel destroyed")
+		return
+	}
 	ch.tru.senderCh <- senderChData{ch, data}
 	return
 }
@@ -55,6 +61,12 @@ func (tru *Tru) newChannel(addr net.Addr, serverMode ...bool) (ch *Channel, err 
 	if len(serverMode) > 0 {
 		ch.mode = serverMode[0]
 	}
+	ch.stat.setLastActivity()
+	ch.stat.checkActivity(func() {
+		log.Println("channel inactive", ch.addr.String())
+		tru.destroyChannel(ch)
+	})
+
 	tru.cannels[addr.String()] = ch
 	return
 }
@@ -66,4 +78,20 @@ func (tru *Tru) getChannel(addr string) (ch *Channel, ok bool) {
 
 	ch, ok = tru.cannels[addr]
 	return
+}
+
+// destroyChannel destroy channel
+func (tru *Tru) destroyChannel(ch *Channel) {
+	tru.m.Lock()
+	defer tru.m.Unlock()
+
+	if ch == nil {
+		return
+	}
+	log.Println("channel destroy", ch.addr.String())
+
+	ch.stat.checkActivityTimer.Stop()
+	ch.stat.destroyed = true
+
+	delete(tru.cannels, ch.addr.String())
 }
