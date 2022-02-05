@@ -10,6 +10,7 @@ import (
 	"container/list"
 	"log"
 	"sync"
+	"time"
 )
 
 type sendQueue struct {
@@ -17,6 +18,12 @@ type sendQueue struct {
 	index map[uint16]*list.Element // Send queue index
 	m     sync.RWMutex             // Send queue mutex
 }
+
+const (
+	minRTT = 30 * time.Millisecond
+	maxRTT = 3000 * time.Millisecond
+	startRTT = 200 * time.Millisecond
+)
 
 // init send queue
 func (s *sendQueue) init() {

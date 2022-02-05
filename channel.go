@@ -90,6 +90,30 @@ func (ch *Channel) setTripTime(id int) (tt time.Duration, err error) {
 	return
 }
 
+// setRetransmitTime set retransmit time to packet
+func (ch *Channel) setRetransmitTime(pac *Packet) (tt time.Time, err error) {
+	rtt := minRTT
+
+	if ch.stat.tripTime == 0 {
+		rtt = startRTT
+	} else {
+		rtt += ch.stat.tripTime
+	}
+
+	if pac.retransmitAttempts > 0 {
+		rtt *= time.Duration(pac.retransmitAttempts + 1)
+	}
+
+	if rtt > maxRTT {
+		rtt = maxRTT
+	}
+
+	tt = time.Now().Add(rtt)
+	pac.retransmitTime = tt
+
+	return
+}
+
 // NewChannel create new tru channel by address
 func (tru *Tru) newChannel(addr net.Addr, serverMode ...bool) (ch *Channel, err error) {
 	tru.m.Lock()

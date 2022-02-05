@@ -13,11 +13,12 @@ import (
 )
 
 type Packet struct {
-	id            uint16    // Packet ID
-	status        uint8     // Packet Type
-	data          []byte    // Packet Data
-	time          time.Time // Packet creating time
-	resendAttempt int       // Packet resend attempt
+	id                 uint16    // Packet ID
+	status             uint8     // Packet Type
+	data               []byte    // Packet Data
+	time               time.Time // Packet creating time
+	retransmitTime     time.Time // Packet retransmit time
+	retransmitAttempts int       // Packet retransmit attempts
 }
 
 const (

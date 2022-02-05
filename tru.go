@@ -192,8 +192,9 @@ func (tru *Tru) senderProccess() {
 			return
 		}
 
-		// Add data packet to send queue
+		// Add data packet to send queue and Set packet retransmit time
 		if r.status == statusData {
+			r.ch.setRetransmitTime(pac)
 			r.ch.sendQueue.add(pac)
 		}
 
