@@ -115,14 +115,27 @@ func (tru *Tru) serve(n int, addr net.Addr, data []byte) {
 	if !ok || pac.Status() == statusConnect {
 		// Got packet from new channel
 		tru.destroyChannel(ch)
-		log.Printf("got packet %d from new channel %s, data: %s\n", n, addr.String(), pac.Data())
+		// log.Printf("got packet %d from new channel %s, data: %s\n", n, addr.String(), pac.Data())
 		tru.connect.serve(tru, addr, pac)
 		return
 	}
 
-	// Send packet to reader process
-	tru.readerCh <- readerChData{ch, pac, nil}
-	ch.stat.setLastActivity()
+	switch pac.Status() {
+	case statusPing:
+		ch.writeToPong()
+		ch.stat.setLastActivity()
+		return
+	case statusPong:
+		ch.stat.setLastActivity()
+		return
+	case statusAck:
+		ch.stat.setLastActivity()
+	case statusData:
+		// Send packet to reader process
+		tru.readerCh <- readerChData{ch, pac, nil}
+		ch.stat.setLastActivity()
+	}
+
 }
 
 type ReaderFunc func(ch *Channel, pac *Packet, err error) (processed bool)
@@ -152,8 +165,9 @@ func (tru *Tru) readerProccess() {
 }
 
 type senderChData struct {
-	ch   *Channel
-	data []byte
+	ch     *Channel
+	data   []byte
+	status int
 }
 
 // senderProccess process sended tru packets
@@ -161,7 +175,11 @@ func (tru *Tru) senderProccess() {
 	for r := range tru.senderCh {
 
 		// Create data packet
-		pac, err := tru.newPacket().SetID(r.ch.newID()).SetStatus(statusData).SetData(r.data).MarshalBinary()
+		id := 0
+		if r.status == statusData {
+			id = r.ch.newID()
+		}
+		pac, err := tru.newPacket().SetID(id).SetStatus(r.status).SetData(r.data).MarshalBinary()
 		if err != nil {
 			return
 		}

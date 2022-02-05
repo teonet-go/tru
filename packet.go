@@ -23,6 +23,7 @@ const (
 	statusData
 	statusAck
 	statusPing
+	statusPong
 	statusDisconnect
 )
 

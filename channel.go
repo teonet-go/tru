@@ -14,7 +14,7 @@ import (
 
 type Channel struct {
 	addr       net.Addr   // Peer address
-	mode       bool       // Server mode if true
+	serverMode bool       // Server mode if true
 	id         uint16     // Next send ID
 	expectedID uint16     // Next expected ID
 	reader     ReaderFunc // Channels reader
@@ -31,12 +31,28 @@ func (ch *Channel) Addr() net.Addr {
 
 // WriteTo writes a packet with data to channel
 func (ch *Channel) WriteTo(data []byte) (err error) {
+	return ch.writeTo(data, statusData)
+}
+
+// writeTo writes a packet with status and data to channel
+func (ch *Channel) writeTo(data []byte, status int) (err error) {
 	if ch.stat.destroyed {
 		err = errors.New("channel destroyed")
 		return
 	}
-	ch.tru.senderCh <- senderChData{ch, data}
+
+	ch.tru.senderCh <- senderChData{ch, data, status}
 	return
+}
+
+// writeToPing writes ping packet to channel
+func (ch *Channel) writeToPing() (err error) {
+	return ch.writeTo(nil, statusPing)
+}
+
+// writeToPong writes pong packet to channel
+func (ch *Channel) writeToPong() (err error) {
+	return ch.writeTo(nil, statusPong)
 }
 
 // newID create new channels packet id
@@ -59,13 +75,23 @@ func (tru *Tru) newChannel(addr net.Addr, serverMode ...bool) (ch *Channel, err 
 
 	ch = &Channel{addr: addr, tru: tru}
 	if len(serverMode) > 0 {
-		ch.mode = serverMode[0]
+		ch.serverMode = serverMode[0]
 	}
 	ch.stat.setLastActivity()
-	ch.stat.checkActivity(func() {
-		log.Println("channel inactive", ch.addr.String())
-		tru.destroyChannel(ch)
-	})
+	ch.stat.checkActivity(
+		// Inactive
+		func() {
+			log.Println("channel inactive", ch.addr.String())
+			tru.destroyChannel(ch)
+		},
+		// Keepalive
+		func() {
+			if ch.serverMode {
+				return
+			}
+			log.Println("channel ping", ch.addr.String())
+			ch.writeToPing()
+		})
 
 	tru.cannels[addr.String()] = ch
 	return

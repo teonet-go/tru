@@ -18,6 +18,7 @@ type statistic struct {
 
 const (
 	checkInactiveAfter      = 1 * time.Second
+	pingInactiveAfter       = 4 * time.Second
 	disconnectInactiveAfter = 5 * time.Second
 )
 
@@ -27,13 +28,20 @@ func (s *statistic) setLastActivity() {
 }
 
 // checkActivity check channel activity every second and call inactive func
-// if channel inactive more than disconnectInactiveAfter time constant
-func (s *statistic) checkActivity(inactive func()) {
+// if channel inactive time grate than disconnectInactiveAfter time constant,
+// and call keepalive func if channel inactive time grate than pingInactiveAfter
+func (s *statistic) checkActivity(inactive, keepalive func()) {
 	s.checkActivityTimer = time.AfterFunc(checkInactiveAfter, func() {
-		if time.Since(s.lastActivity) > disconnectInactiveAfter {
+		switch {
+
+		case time.Since(s.lastActivity) > disconnectInactiveAfter:
 			inactive()
 			return
+
+		case time.Since(s.lastActivity) > pingInactiveAfter:
+			keepalive()
 		}
-		s.checkActivity(inactive)
+		
+		s.checkActivity(inactive, keepalive)
 	})
 }
