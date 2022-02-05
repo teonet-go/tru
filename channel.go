@@ -35,13 +35,18 @@ func (ch *Channel) WriteTo(data []byte) (err error) {
 }
 
 // writeTo writes a packet with status and data to channel
-func (ch *Channel) writeTo(data []byte, status int) (err error) {
+func (ch *Channel) writeTo(data []byte, status int, ids ...int) (err error) {
 	if ch.stat.destroyed {
 		err = errors.New("channel destroyed")
 		return
 	}
 
-	ch.tru.senderCh <- senderChData{ch, data, status}
+	var id = 0
+	if len(ids) > 0 {
+		id = ids[0]
+	}
+
+	ch.tru.senderCh <- senderChData{ch, data, status, id}
 	return
 }
 
@@ -53,6 +58,11 @@ func (ch *Channel) writeToPing() (err error) {
 // writeToPong writes pong packet to channel
 func (ch *Channel) writeToPong() (err error) {
 	return ch.writeTo(nil, statusPong)
+}
+
+// writeToAck writes ack to packet to channel
+func (ch *Channel) writeToAck(pac *Packet) (err error) {
+	return ch.writeTo(nil, statusAck, pac.ID())
 }
 
 // newID create new channels packet id

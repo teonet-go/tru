@@ -124,16 +124,19 @@ func (tru *Tru) serve(n int, addr net.Addr, data []byte) {
 	case statusPing:
 		ch.writeToPong()
 		ch.stat.setLastActivity()
-		return
+
 	case statusPong:
 		ch.stat.setLastActivity()
-		return
+
 	case statusAck:
+		log.Println("got ack", pac.ID())
 		ch.stat.setLastActivity()
+
 	case statusData:
+		ch.writeToAck(pac)
+		ch.stat.setLastActivity()
 		// Send packet to reader process
 		tru.readerCh <- readerChData{ch, pac, nil}
-		ch.stat.setLastActivity()
 	}
 
 }
@@ -168,6 +171,7 @@ type senderChData struct {
 	ch     *Channel
 	data   []byte
 	status int
+	id     int
 }
 
 // senderProccess process sended tru packets
@@ -175,7 +179,7 @@ func (tru *Tru) senderProccess() {
 	for r := range tru.senderCh {
 
 		// Create data packet
-		id := 0
+		id := r.id
 		if r.status == statusData {
 			id = r.ch.newID()
 		}
