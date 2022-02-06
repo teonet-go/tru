@@ -38,6 +38,7 @@ func (tru *Tru) newChannel(addr net.Addr, serverMode ...bool) (ch *Channel, err 
 		ch.serverMode = serverMode[0]
 	}
 	ch.sendQueue.init(ch)
+	ch.stat.started = time.Now()
 	ch.stat.setLastActivity()
 	ch.stat.checkActivity(
 		// Inactive

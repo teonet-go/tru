@@ -16,6 +16,7 @@ import (
 
 type statistic struct {
 	destroyed          bool
+	started            time.Time
 	lastActivity       time.Time
 	checkActivityTimer *time.Timer
 
@@ -59,14 +60,16 @@ func (s *statistic) checkActivity(inactive, keepalive func()) {
 func (tru *Tru) PrintStatistic() {
 
 	type statData struct {
-		Addr string
-		Send uint64
-		Rsnd uint64
-		Recv uint64
-		Drop uint64
-		SQ   uint
-		RQ   uint
-		TT   float64
+		Addr string  // peer address
+		Send uint64  // send packets
+		Ssec uint64  // send per second
+		Rsnd uint64  // resend packets
+		Recv uint64  // receive packets
+		Rsec uint64  // receive per second
+		Drop uint64  // drop received packets
+		SQ   uint    // send queue length
+		RQ   uint    // receive queue length
+		TT   float64 // trip time
 	}
 
 	go func() {
@@ -81,13 +84,26 @@ func (tru *Tru) PrintStatistic() {
 
 			tru.m.RLock()
 			for _, ch := range tru.cannels {
+				sec := uint64(time.Since(ch.stat.started).Seconds())
 				stat = append(stat, statData{
 					Addr: ch.addr.String(),
 					Send: ch.stat.send,
+					Ssec: func() uint64 {
+						if sec == 0 {
+							return 0
+						}
+						return ch.stat.send / sec
+					}(),
 					Rsnd: ch.stat.retransmit,
 					Recv: ch.stat.recv,
-					SQ:   uint(ch.sendQueue.queue.Len()),
-					TT:   float64(ch.stat.tripTime.Microseconds()) / 1000.0,
+					Rsec: func() uint64 {
+						if sec == 0 {
+							return 0
+						}
+						return ch.stat.recv / sec
+					}(),
+					SQ: uint(ch.sendQueue.queue.Len()),
+					TT: float64(ch.stat.tripTime.Microseconds()) / 1000.0,
 				})
 			}
 			tru.m.RUnlock()
