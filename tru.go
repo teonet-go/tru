@@ -137,6 +137,7 @@ func (tru *Tru) serve(n int, addr net.Addr, data []byte) {
 		ch.sendQueue.delete(pac.ID())
 
 	case statusData:
+		ch.stat.recv++
 		ch.writeToAck(pac)
 		// Send packet to reader process
 		tru.readerCh <- readerChData{ch, pac, nil}
@@ -201,6 +202,7 @@ func (tru *Tru) senderProccess() {
 		if r.status == statusData {
 			r.ch.setRetransmitTime(pac)
 			r.ch.sendQueue.add(pac)
+			r.ch.stat.send++
 		}
 
 		// Write packet to addr

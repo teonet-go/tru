@@ -7,14 +7,22 @@
 package tru
 
 import (
+	"fmt"
+	"sort"
 	"time"
+
+	"github.com/kirill-scherba/stable"
 )
 
 type statistic struct {
 	destroyed          bool
 	lastActivity       time.Time
 	checkActivityTimer *time.Timer
-	tripTime           time.Duration
+
+	tripTime   time.Duration
+	send       uint64
+	retransmit uint64
+	recv       uint64
 }
 
 const (
@@ -45,4 +53,57 @@ func (s *statistic) checkActivity(inactive, keepalive func()) {
 
 		s.checkActivity(inactive, keepalive)
 	})
+}
+
+// PrintStatistic print tru statistics
+func (tru *Tru) PrintStatistic() {
+
+	type statData struct {
+		Addr string
+		Send uint64
+		Rsnd uint64
+		Recv uint64
+		Drop uint64
+		SQ   uint
+		RQ   uint
+		TT   float64
+	}
+
+	go func() {
+		start := time.Now()
+		fmt.Print("\033[s") // save the cursor position
+		for {
+			time.Sleep(250 * time.Millisecond)
+
+			var stat []statData
+			// var aligns = []int{0, 0, 0, 1}
+			var st = new(stable.Stable)
+
+			tru.m.RLock()
+			for _, ch := range tru.cannels {
+				stat = append(stat, statData{
+					Addr: ch.addr.String(),
+					Send: ch.stat.send,
+					Rsnd: ch.stat.retransmit,
+					Recv: ch.stat.recv,
+					SQ:   uint(ch.sendQueue.queue.Len()),
+					TT:   float64(ch.stat.tripTime.Microseconds()) / 1000.0,
+				})
+			}
+			tru.m.RUnlock()
+
+			sort.Slice(stat, func(i, j int) bool {
+				return stat[i].Addr < stat[j].Addr
+			})
+
+			fmt.Print("\033[?25l") // hide cursor
+			fmt.Print("\033[u")    // restore the cursor position
+			fmt.Printf("TRU peer %s statistic %v:\n%s\n",
+				tru.LocalAddr().String(),
+				time.Since(start),
+				st.StructToTable(stat), // aligns...),
+			)
+			fmt.Print("\033[?25h") // show cursor
+		}
+	}()
 }

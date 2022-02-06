@@ -15,7 +15,8 @@ import (
 var port = flag.Int("p", 0, "local port number")
 var addr = flag.String("a", "", "remote address to connect to")
 var nolog = flag.Bool("nolog", false, "disable log messages")
-var delay = flag.Int("delay", 2500, "2500 send delay in Millisecond")
+var stat = flag.Bool("stat", false, "print statistic")
+var delay = flag.Int("delay", 2500000, "send delay in Microseconds")
 
 func main() {
 
@@ -38,7 +39,12 @@ func main() {
 	}
 
 	// Send packets if addr flag set
-	Sender(t, *addr)
+	go Sender(t, *addr)
+
+	// Print statistic if -stat flag is on
+	if *stat {
+		t.PrintStatistic()
+	}
 
 	select {}
 }
@@ -77,6 +83,6 @@ connect:
 		}
 		log.Printf("send %d bytes data to %s, data: %s\n", len(data), ch.Addr().String(), data)
 
-		time.Sleep(time.Duration(*delay) * time.Millisecond)
+		time.Sleep(time.Duration(*delay) * time.Microsecond)
 	}
 }

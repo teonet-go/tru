@@ -95,6 +95,7 @@ func (s *sendQueue) retransmit(ch *Channel) {
 			ch.setRetransmitTime(pac)
 			data, _ := pac.MarshalBinary()
 			ch.tru.writeTo(data, ch.addr)
+			ch.stat.retransmit++
 			log.Println("!!!  retransmit id:", pac.ID(), "sq:", len(s.index))
 		}
 
