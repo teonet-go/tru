@@ -114,8 +114,9 @@ func (tru *Tru) serve(n int, addr net.Addr, data []byte) {
 	ch, ok := tru.getChannel(addr.String())
 	if !ok || pac.Status() == statusConnect {
 		// Got packet from new channel
-		tru.destroyChannel(ch)
-		// log.Printf("got packet %d from new channel %s, data: %s\n", n, addr.String(), pac.Data())
+		if ok {
+			ch.destroy()
+		}
 		tru.connect.serve(tru, addr, pac)
 		return
 	}

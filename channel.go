@@ -26,6 +26,47 @@ type Channel struct {
 
 // const MaxUint16 = ^uint16(0)
 
+// NewChannel create new tru channel by address
+func (tru *Tru) newChannel(addr net.Addr, serverMode ...bool) (ch *Channel, err error) {
+	tru.m.Lock()
+	defer tru.m.Unlock()
+
+	log.Println("new channel", addr.String())
+
+	ch = &Channel{addr: addr, tru: tru}
+	if len(serverMode) > 0 {
+		ch.serverMode = serverMode[0]
+	}
+	ch.sendQueue.init(ch)
+	ch.stat.setLastActivity()
+	ch.stat.checkActivity(
+		// Inactive
+		func() {
+			log.Println("channel inactive", ch.addr.String())
+			ch.destroy()
+		},
+		// Keepalive
+		func() {
+			if ch.serverMode {
+				return
+			}
+			log.Println("channel ping", ch.addr.String())
+			ch.writeToPing()
+		})
+
+	tru.cannels[addr.String()] = ch
+	return
+}
+
+// getChannel get tru channel by address
+func (tru *Tru) getChannel(addr string) (ch *Channel, ok bool) {
+	tru.m.RLock()
+	defer tru.m.RUnlock()
+
+	ch, ok = tru.cannels[addr]
+	return
+}
+
 // Addr return channel address
 func (ch *Channel) Addr() net.Addr {
 	return ch.addr
@@ -114,51 +155,10 @@ func (ch *Channel) setRetransmitTime(pac *Packet) (tt time.Time, err error) {
 	return
 }
 
-// NewChannel create new tru channel by address
-func (tru *Tru) newChannel(addr net.Addr, serverMode ...bool) (ch *Channel, err error) {
-	tru.m.Lock()
-	defer tru.m.Unlock()
-
-	log.Println("new channel", addr.String())
-
-	ch = &Channel{addr: addr, tru: tru}
-	if len(serverMode) > 0 {
-		ch.serverMode = serverMode[0]
-	}
-	ch.sendQueue.init(ch)
-	ch.stat.setLastActivity()
-	ch.stat.checkActivity(
-		// Inactive
-		func() {
-			log.Println("channel inactive", ch.addr.String())
-			tru.destroyChannel(ch)
-		},
-		// Keepalive
-		func() {
-			if ch.serverMode {
-				return
-			}
-			log.Println("channel ping", ch.addr.String())
-			ch.writeToPing()
-		})
-
-	tru.cannels[addr.String()] = ch
-	return
-}
-
-// getChannel get tru channel by address
-func (tru *Tru) getChannel(addr string) (ch *Channel, ok bool) {
-	tru.m.RLock()
-	defer tru.m.RUnlock()
-
-	ch, ok = tru.cannels[addr]
-	return
-}
-
-// destroyChannel destroy channel
-func (tru *Tru) destroyChannel(ch *Channel) {
-	tru.m.Lock()
-	defer tru.m.Unlock()
+// destroy destroy channel
+func (ch *Channel) destroy() {
+	ch.tru.m.Lock()
+	defer ch.tru.m.Unlock()
 
 	if ch == nil {
 		return
@@ -169,5 +169,5 @@ func (tru *Tru) destroyChannel(ch *Channel) {
 	ch.sendQueue.retransmitTimer.Stop()
 	ch.stat.destroyed = true
 
-	delete(tru.cannels, ch.addr.String())
+	delete(ch.tru.cannels, ch.addr.String())
 }

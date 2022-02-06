@@ -21,9 +21,10 @@ type sendQueue struct {
 }
 
 const (
-	minRTT   = 30 * time.Millisecond
-	maxRTT   = 3000 * time.Millisecond
-	startRTT = 200 * time.Millisecond
+	minRTT                = 30 * time.Millisecond
+	maxRTT                = 3000 * time.Millisecond
+	startRTT              = 200 * time.Millisecond
+	maxRetransmitAttempts = 5
 )
 
 // init send queue
@@ -87,6 +88,10 @@ func (s *sendQueue) retransmit(ch *Channel) {
 			}
 			// Resend packet and set new retransmitTime
 			pac.retransmitAttempts++
+			if pac.retransmitAttempts > maxRetransmitAttempts {
+				ch.destroy()
+				return
+			}
 			ch.setRetransmitTime(pac)
 			data, _ := pac.MarshalBinary()
 			ch.tru.writeTo(data, ch.addr)
