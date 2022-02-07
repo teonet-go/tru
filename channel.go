@@ -14,14 +14,15 @@ import (
 )
 
 type Channel struct {
-	addr       net.Addr   // Peer address
-	serverMode bool       // Server mode if true
-	id         uint16     // Next send ID
-	expectedID uint16     // Next expected ID
-	reader     ReaderFunc // Channels reader
-	stat       statistic  // Statictic struct and receiver
-	sendQueue  sendQueue  // Send queue
-	tru        *Tru       // Pointer to tru
+	addr       net.Addr     // Peer address
+	serverMode bool         // Server mode if true
+	id         uint16       // Next send ID
+	expectedID uint16       // Next expected ID
+	reader     ReaderFunc   // Channels reader
+	stat       statistic    // Statictic struct and receiver
+	sendQueue  sendQueue    // Send queue
+	recvQueue  receiveQueue // Receive queue
+	tru        *Tru         // Pointer to tru
 }
 
 // const MaxUint16 = ^uint16(0)
@@ -38,6 +39,7 @@ func (tru *Tru) newChannel(addr net.Addr, serverMode ...bool) (ch *Channel, err 
 		ch.serverMode = serverMode[0]
 	}
 	ch.sendQueue.init(ch)
+	ch.recvQueue.init(ch)
 	ch.stat.started = time.Now()
 	ch.stat.setLastActivity()
 	ch.stat.checkActivity(
@@ -120,6 +122,17 @@ func (ch *Channel) newID() (id int) {
 	return
 }
 
+// newExpectedID create new channels packet expected id
+func (ch *Channel) newExpectedID() (id int) {
+	ch.tru.m.Lock()
+	defer ch.tru.m.Unlock()
+
+	ch.expectedID++
+	id = int(ch.expectedID)
+
+	return
+}
+
 // setTripTime calculate return and set trip time to statistic
 func (ch *Channel) setTripTime(id int) (tt time.Duration, err error) {
 	_, pac, ok := ch.sendQueue.get(id)
@@ -158,12 +171,13 @@ func (ch *Channel) setRetransmitTime(pac *Packet) (tt time.Time, err error) {
 
 // destroy destroy channel
 func (ch *Channel) destroy() {
-	ch.tru.m.Lock()
-	defer ch.tru.m.Unlock()
-
 	if ch == nil {
 		return
 	}
+
+	ch.tru.m.Lock()
+	defer ch.tru.m.Unlock()
+
 	log.Println("channel destroy", ch.addr.String())
 
 	ch.stat.checkActivityTimer.Stop()

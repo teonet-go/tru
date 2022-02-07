@@ -24,6 +24,7 @@ type statistic struct {
 	send       uint64
 	retransmit uint64
 	recv       uint64
+	drop       uint64
 }
 
 const (
@@ -102,8 +103,10 @@ func (tru *Tru) PrintStatistic() {
 						}
 						return ch.stat.recv / sec
 					}(),
-					SQ: uint(ch.sendQueue.queue.Len()),
-					TT: float64(ch.stat.tripTime.Microseconds()) / 1000.0,
+					Drop: ch.stat.drop,
+					SQ:   uint(ch.sendQueue.len()),
+					RQ:   uint(ch.recvQueue.len()),
+					TT:   float64(ch.stat.tripTime.Microseconds()) / 1000.0,
 				})
 			}
 			tru.m.RUnlock()
@@ -114,7 +117,7 @@ func (tru *Tru) PrintStatistic() {
 
 			fmt.Print("\033[?25l") // hide cursor
 			fmt.Print("\033[u")    // restore the cursor position
-			fmt.Printf("TRU peer %s statistic %v:\n%s\n",
+			fmt.Printf("\033[KTRU peer %s statistic %v:\n%s\n\033[K",
 				tru.LocalAddr().String(),
 				time.Since(start),
 				st.StructToTable(stat), // aligns...),

@@ -137,10 +137,32 @@ func (tru *Tru) serve(n int, addr net.Addr, data []byte) {
 		ch.sendQueue.delete(pac.ID())
 
 	case statusData:
-		ch.stat.recv++
+		dist := pac.distance(ch.expectedID, pac.id)
 		ch.writeToAck(pac)
-		// Send packet to reader process
-		tru.readerCh <- readerChData{ch, pac, nil}
+		switch {
+		// Already processed packet (id < expectedID)
+		case dist < 0:
+			ch.stat.drop++
+		// Packet with id more than expectedID placed to receive queue and wait
+		// previouse packets
+		case dist > 0:
+			_, ok := ch.recvQueue.get(pac.ID())
+			if !ok {
+				ch.recvQueue.add(pac)
+			} else {
+				ch.stat.drop++
+			}
+		// Valid data packet received (id == expectedID)
+		case dist == 0:
+			// Send packet to reader process and process receive queue
+			sendToReader := func(ch *Channel, pac *Packet) {
+				tru.readerCh <- readerChData{ch, pac, nil}
+				ch.newExpectedID()
+				ch.stat.recv++
+			}
+			sendToReader(ch, pac)
+			ch.recvQueue.process(ch, sendToReader)
+		}
 	}
 
 	ch.stat.setLastActivity()

@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// TRU Channels module
+// TRU Send Queue module
 
 package tru
 
@@ -16,7 +16,7 @@ import (
 type sendQueue struct {
 	queue           list.List                // Send queue list
 	index           map[uint16]*list.Element // Send queue index
-	m               sync.RWMutex             // Send queue mutex
+	sync.RWMutex                             // Send queue mutex
 	retransmitTimer *time.Timer              // Send queue retransmit Timer
 }
 
@@ -35,8 +35,8 @@ func (s *sendQueue) init(ch *Channel) {
 
 // add packet to send queue
 func (s *sendQueue) add(pac *Packet) {
-	s.m.Lock()
-	defer s.m.Unlock()
+	s.Lock()
+	defer s.Unlock()
 
 	id := uint16(pac.ID())
 	s.index[id] = s.queue.PushBack(pac)
@@ -45,8 +45,8 @@ func (s *sendQueue) add(pac *Packet) {
 
 // delete packet from send queue
 func (s *sendQueue) delete(id int) (pac *Packet, ok bool) {
-	s.m.Lock()
-	defer s.m.Unlock()
+	s.Lock()
+	defer s.Unlock()
 
 	e, pac, ok := s.get(id, false)
 	if ok {
@@ -57,11 +57,11 @@ func (s *sendQueue) delete(id int) (pac *Packet, ok bool) {
 	return
 }
 
-// get packet in sendQueue
+// get packet from send queue
 func (s *sendQueue) get(id int, lock ...bool) (e *list.Element, pac *Packet, ok bool) {
 	if len(lock) == 0 || lock[0] {
-		s.m.RLock()
-		defer s.m.RUnlock()
+		s.RLock()
+		defer s.RUnlock()
 	}
 
 	e, ok = s.index[uint16(id)]
@@ -71,12 +71,20 @@ func (s *sendQueue) get(id int, lock ...bool) (e *list.Element, pac *Packet, ok 
 	return
 }
 
+// len return send queue len
+func (s *sendQueue) len() int {
+	s.RLock()
+	defer s.RUnlock()
+
+	return len(s.index)
+}
+
 // retransmit packets from send queue
 func (s *sendQueue) retransmit(ch *Channel) {
 	s.retransmitTimer = time.AfterFunc(minRTT, func() {
 
-		s.m.RLock()
-		defer s.m.RUnlock()
+		s.RLock()
+		defer s.RUnlock()
 
 		// Retransmit packets from send queue while retransmit
 		// time before now

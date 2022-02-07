@@ -112,3 +112,26 @@ func (p *Packet) SetStatus(status int) (out *Packet) {
 	out.status = uint8(status)
 	return
 }
+
+// distance check received packet distance and return integer value
+// lesse than zero than 'id < expectedID' or return integer value more than
+// zero than 'id > tcd.expectedID'
+func (p *Packet) distance(expectedID uint16, id uint16) int {
+	if expectedID == id {
+		return 0
+	}
+
+	// Number of packets id
+	const packetIDlimit = 0x10000
+	// modSubU module of subtraction
+	modSubU := func(arga, argb uint16, mod uint32) int32 {
+		sub := (uint32(arga) % mod) + mod - (uint32(argb) % mod)
+		return int32(sub % mod)
+	}
+
+	diff := modSubU(id, expectedID, packetIDlimit)
+	if diff < packetIDlimit/2 {
+		return int(diff)
+	}
+	return int(diff - packetIDlimit)
+}
