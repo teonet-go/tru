@@ -119,9 +119,12 @@ func (s *sendQueue) retransmit(ch *Channel) {
 			ch.tru.writeTo(data, ch.addr)
 			ch.stat.retransmit++
 			log.Println("!!!  retransmit id:", pac.ID(), "sq:", len(s.index))
-			if pac.retransmitAttempts > 1 {
-				break
-			}
+
+			// Does not retranmit another packets if this has more than 1
+			// retransmit attempts
+			// if pac.retransmitAttempts > 1 {
+			// 	break
+			// }
 		}
 
 		s.retransmit(ch)
