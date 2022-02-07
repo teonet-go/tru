@@ -235,19 +235,19 @@ func (tru *Tru) senderProccess() {
 		// Write packet to addr
 		// tru.conn.WriteTo(pac, r.ch.Addr)
 
-		// Does not write packet to channel if first element has 
-		// retransmitAttempts. This packet allready added to send queue and will 
+		// Does not write packet to channel if first element has
+		// retransmitAttempts. This packet allready added to send queue and will
 		// be transmitted later
 		if r.status == statusData {
 			p := r.ch.sendQueue.getFirst()
 			if p != nil && p.retransmitAttempts > 0 {
-
+				r.ch.stat.retransmit--
 				continue
 			}
 		}
 
 		// Drop packet for testing ig drop flag is set. Drops every drop packet
-		// If drop contain 5 than every 5 packet will be dropped 
+		// If drop contain 5 than every 5 packet will be dropped
 		if *drop > 0 && r.status == statusData && !r.ch.serverMode && rand.Intn(*drop) == 0 {
 			continue
 		}

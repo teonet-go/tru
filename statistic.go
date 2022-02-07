@@ -21,10 +21,10 @@ type statistic struct {
 	checkActivityTimer *time.Timer
 
 	tripTime   time.Duration
-	send       uint64
-	retransmit uint64
-	recv       uint64
-	drop       uint64
+	send       int64
+	retransmit int64
+	recv       int64
+	drop       int64
 }
 
 const (
@@ -62,12 +62,12 @@ func (tru *Tru) PrintStatistic() {
 
 	type statData struct {
 		Addr string  // peer address
-		Send uint64  // send packets
-		Ssec uint64  // send per second
-		Rsnd uint64  // resend packets
-		Recv uint64  // receive packets
-		Rsec uint64  // receive per second
-		Drop uint64  // drop received packets
+		Send int64   // send packets
+		Ssec int64   // send per second
+		Rsnd int64   // resend packets
+		Recv int64   // receive packets
+		Rsec int64   // receive per second
+		Drop int64   // drop received packets
 		SQ   uint    // send queue length
 		RQ   uint    // receive queue length
 		TT   float64 // trip time
@@ -85,11 +85,11 @@ func (tru *Tru) PrintStatistic() {
 
 			tru.m.RLock()
 			for _, ch := range tru.cannels {
-				sec := uint64(time.Since(ch.stat.started).Seconds())
+				sec := int64(time.Since(ch.stat.started).Seconds())
 				stat = append(stat, statData{
 					Addr: ch.addr.String(),
 					Send: ch.stat.send,
-					Ssec: func() uint64 {
+					Ssec: func() int64 {
 						if sec == 0 {
 							return 0
 						}
@@ -97,7 +97,7 @@ func (tru *Tru) PrintStatistic() {
 					}(),
 					Rsnd: ch.stat.retransmit,
 					Recv: ch.stat.recv,
-					Rsec: func() uint64 {
+					Rsec: func() int64 {
 						if sec == 0 {
 							return 0
 						}
