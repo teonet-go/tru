@@ -165,6 +165,7 @@ func (ch *Channel) setRetransmitTime(pac *Packet) (tt time.Time, err error) {
 
 	tt = time.Now().Add(rtt)
 	pac.retransmitTime = tt
+	pac.time = time.Now()
 
 	return
 }

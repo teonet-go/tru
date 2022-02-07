@@ -6,7 +6,9 @@
 package tru
 
 import (
+	"flag"
 	"log"
+	"math/rand"
 	"net"
 	"strconv"
 	"sync"
@@ -21,6 +23,8 @@ type Tru struct {
 	connect  connect             // Connect methods receiver
 	m        sync.RWMutex        // Channels map mutex
 }
+
+var drop = flag.Int("drop", 0, "drop send packets")
 
 // New create new tru object and start listen udp packets
 func New(port int, reader ...ReaderFunc) (tru *Tru, err error) {
@@ -157,10 +161,11 @@ func (tru *Tru) serve(n int, addr net.Addr, data []byte) {
 			// Send packet to reader process and process receive queue
 			sendToReader := func(ch *Channel, pac *Packet) {
 				tru.readerCh <- readerChData{ch, pac, nil}
-				ch.newExpectedID()
-				ch.stat.recv++
 			}
 			sendToReader(ch, pac)
+			ch.newExpectedID()
+			ch.stat.recv++
+
 			ch.recvQueue.process(ch, sendToReader)
 		}
 	}
@@ -229,6 +234,24 @@ func (tru *Tru) senderProccess() {
 
 		// Write packet to addr
 		// tru.conn.WriteTo(pac, r.ch.Addr)
+
+		// Does not write packet to channel if first element has 
+		// retransmitAttempts. This packet allready added to send queue and will 
+		// be transmitted later
+		if r.status == statusData {
+			p := r.ch.sendQueue.getFirst()
+			if p != nil && p.retransmitAttempts > 0 {
+
+				continue
+			}
+		}
+
+		// Drop packet for testing ig drop flag is set. Drops every drop packet
+		// If drop contain 5 than every 5 packet will be dropped 
+		if *drop > 0 && r.status == statusData && !r.ch.serverMode && rand.Intn(*drop) == 0 {
+			continue
+		}
+
 		tru.writeTo(data, r.ch.addr)
 	}
 }

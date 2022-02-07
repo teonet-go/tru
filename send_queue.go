@@ -71,6 +71,20 @@ func (s *sendQueue) get(id int, lock ...bool) (e *list.Element, pac *Packet, ok 
 	return
 }
 
+// getFirst return first queu element or nil if queue is empty
+func (s *sendQueue) getFirst() (pac *Packet) {
+	s.RLock()
+	defer s.RUnlock()
+
+	e := s.queue.Front()
+	if e == nil {
+		return
+	}
+
+	pac = e.Value.(*Packet)
+	return
+}
+
 // len return send queue len
 func (s *sendQueue) len() int {
 	s.RLock()
@@ -105,6 +119,9 @@ func (s *sendQueue) retransmit(ch *Channel) {
 			ch.tru.writeTo(data, ch.addr)
 			ch.stat.retransmit++
 			log.Println("!!!  retransmit id:", pac.ID(), "sq:", len(s.index))
+			if pac.retransmitAttempts > 1 {
+				break
+			}
 		}
 
 		s.retransmit(ch)
