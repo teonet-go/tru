@@ -24,6 +24,8 @@ type Tru struct {
 	m        sync.RWMutex        // Channels map mutex
 }
 
+const chanLen = 10
+
 var drop = flag.Int("drop", 0, "drop send packets")
 
 // New create new tru object and start listen udp packets
@@ -44,11 +46,11 @@ func New(port int, reader ...ReaderFunc) (tru *Tru, err error) {
 	}
 
 	// Start packet reader processing
-	tru.readerCh = make(chan readerChData, 10)
+	tru.readerCh = make(chan readerChData, chanLen)
 	go tru.readerProccess()
 
 	// Start packet sender processing
-	tru.senderCh = make(chan senderChData, 10)
+	tru.senderCh = make(chan senderChData, chanLen)
 	go tru.senderProccess()
 
 	// start listen to incoming udp packets
@@ -232,26 +234,24 @@ func (tru *Tru) senderProccess() {
 			r.ch.stat.send++
 		}
 
-		// Write packet to addr
-		// tru.conn.WriteTo(pac, r.ch.Addr)
-
 		// Does not write packet to channel if first element has
 		// retransmitAttempts. This packet allready added to send queue and will
 		// be transmitted later
 		if r.status == statusData {
 			p := r.ch.sendQueue.getFirst()
 			if p != nil && p.retransmitAttempts > 0 {
-				r.ch.stat.retransmit--
-				continue
+				// r.ch.stat.retransmit--
+				// continue
 			}
 		}
 
-		// Drop packet for testing ig drop flag is set. Drops every drop packet
-		// If drop contain 5 than every 5 packet will be dropped
+		// Drop packet for testing ig drop flag is set. Drops every value of
+		// drop packet. If drop contain 5 than every 5th packet will be dropped
 		if *drop > 0 && r.status == statusData && !r.ch.serverMode && rand.Intn(*drop) == 0 {
 			continue
 		}
 
+		// Write packet to addr
 		tru.writeTo(data, r.ch.addr)
 	}
 }

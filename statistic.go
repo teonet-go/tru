@@ -117,9 +117,12 @@ func (tru *Tru) PrintStatistic() {
 
 			fmt.Print("\033[?25l") // hide cursor
 			fmt.Print("\033[u")    // restore the cursor position
-			fmt.Printf("\033[KTRU peer %s statistic %v:\n%s\n\033[K",
+			fmt.Printf("\033[KTRU %s, RCh: %d, SCh: %d, time: %v:\n%s\n\033[K",
 				tru.LocalAddr().String(),
+				len(tru.readerCh),
+				len(tru.senderCh),
 				time.Since(start),
+
 				st.StructToTable(stat), // aligns...),
 			)
 			fmt.Print("\033[?25h") // show cursor
