@@ -8,6 +8,7 @@ package tru
 
 import (
 	"errors"
+	"fmt"
 	"log"
 	"net"
 	"time"
@@ -19,6 +20,7 @@ type Channel struct {
 	id         uint16       // Next send ID
 	expectedID uint16       // Next expected ID
 	reader     ReaderFunc   // Channels reader
+	delay      int          // Client send delay
 	stat       statistic    // Statictic struct and receiver
 	sendQueue  sendQueue    // Send queue
 	recvQueue  receiveQueue // Receive queue
@@ -27,14 +29,22 @@ type Channel struct {
 
 // const MaxUint16 = ^uint16(0)
 
+func (tru *Tru) addToMsgsLog(msg string) {
+	const layout = "2006-01-02 15:04:05"
+	msg = fmt.Sprintf("%v %s", time.Now().Format(layout), msg)
+	tru.statLogMsgs = append(tru.statLogMsgs, msg)
+}
+
 // NewChannel create new tru channel by address
 func (tru *Tru) newChannel(addr net.Addr, serverMode ...bool) (ch *Channel, err error) {
 	tru.m.Lock()
 	defer tru.m.Unlock()
 
-	log.Println("new channel", addr.String())
+	msg := fmt.Sprint("new channel ", addr.String())
+	log.Println(msg)
+	tru.addToMsgsLog(msg)
 
-	ch = &Channel{addr: addr, tru: tru}
+	ch = &Channel{addr: addr, tru: tru, delay: tru.delay}
 	if len(serverMode) > 0 {
 		ch.serverMode = serverMode[0]
 	}
@@ -45,8 +55,7 @@ func (tru *Tru) newChannel(addr net.Addr, serverMode ...bool) (ch *Channel, err 
 	ch.stat.checkActivity(
 		// Inactive
 		func() {
-			log.Println("channel inactive", ch.addr.String())
-			ch.destroy()
+			ch.destroy(fmt.Sprint("channel inactive, destroy ", ch.addr.String()))
 		},
 		// Keepalive
 		func() {
@@ -171,7 +180,7 @@ func (ch *Channel) setRetransmitTime(pac *Packet) (tt time.Time, err error) {
 }
 
 // destroy destroy channel
-func (ch *Channel) destroy() {
+func (ch *Channel) destroy(msg string) {
 	if ch == nil {
 		return
 	}
@@ -186,4 +195,5 @@ func (ch *Channel) destroy() {
 	ch.stat.destroyed = true
 
 	delete(ch.tru.cannels, ch.addr.String())
+	ch.tru.addToMsgsLog(msg)
 }

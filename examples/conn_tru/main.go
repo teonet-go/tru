@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"os"
+	"os/signal"
 	"time"
 
 	"github.com/kirill-scherba/tru"
@@ -16,7 +18,7 @@ var port = flag.Int("p", 0, "local port number")
 var addr = flag.String("a", "", "remote address to connect to")
 var nolog = flag.Bool("nolog", false, "disable log messages")
 var stat = flag.Bool("stat", false, "print statistic")
-var delay = flag.Int("delay", 2500000, "send delay in Microseconds")
+var delay = flag.Int("delay", 0, "send delay in Microseconds")
 
 func main() {
 
@@ -33,17 +35,25 @@ func main() {
 	}
 
 	// Create server connection and start listen incominng packets
-	t, err := tru.New(*port, Reader)
+	tru, err := tru.New(*port, Reader)
 	if err != nil {
 		log.Fatal(err)
 	}
+	tru.SetSendDelay(*delay)
 
 	// Send packets if addr flag set
-	go Sender(t, *addr)
+	go Sender(tru, *addr)
 
 	// Print statistic if -stat flag is on
 	if *stat {
-		t.PrintStatistic()
+		tru.PrintStatistic()
+		defer tru.StopPrintStatistic()
+		c := make(chan os.Signal, 1)
+		signal.Notify(c, os.Interrupt)
+		for range c {
+			// sig is a ^C, handle it
+			return
+		}
 	}
 
 	select {}

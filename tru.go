@@ -7,21 +7,26 @@ package tru
 
 import (
 	"flag"
+	"fmt"
 	"log"
 	"math/rand"
 	"net"
 	"strconv"
 	"sync"
+	"time"
 )
 
 type Tru struct {
-	conn     net.PacketConn      // Local connection
-	cannels  map[string]*Channel // Channels map
-	reader   ReaderFunc          // Global tru reader
-	readerCh chan readerChData   // Reader channel
-	senderCh chan senderChData   // Sender channel
-	connect  connect             // Connect methods receiver
-	m        sync.RWMutex        // Channels map mutex
+	conn        net.PacketConn      // Local connection
+	cannels     map[string]*Channel // Channels map
+	reader      ReaderFunc          // Global tru reader
+	readerCh    chan readerChData   // Reader channel
+	senderCh    chan senderChData   // Sender channel
+	connect     connect             // Connect methods receiver
+	delay       int                 // Send delay
+	statLogMsgs []string            // Log messages
+	statTimer   *time.Timer         // Show statistic timer
+	m           sync.RWMutex        // Channels map mutex
 }
 
 const chanLen = 10
@@ -57,6 +62,10 @@ func New(port int, reader ...ReaderFunc) (tru *Tru, err error) {
 	go tru.listen()
 
 	return
+}
+
+func (tru *Tru) SetSendDelay(delay int) {
+	tru.delay = delay
 }
 
 // LocalAddr returns the local network address
@@ -121,7 +130,7 @@ func (tru *Tru) serve(n int, addr net.Addr, data []byte) {
 	if !ok || pac.Status() == statusConnect {
 		// Got packet from new channel
 		if ok {
-			ch.destroy()
+			ch.destroy(fmt.Sprint("channel reconnect, destroy ", ch.addr.String()))
 		}
 		tru.connect.serve(tru, addr, pac)
 		return

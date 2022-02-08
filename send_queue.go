@@ -8,6 +8,7 @@ package tru
 
 import (
 	"container/list"
+	"fmt"
 	"log"
 	"sync"
 	"time"
@@ -24,7 +25,7 @@ const (
 	minRTT                = 30 * time.Millisecond
 	maxRTT                = 3000 * time.Millisecond
 	startRTT              = 200 * time.Millisecond
-	maxRetransmitAttempts = 5
+	maxRetransmitAttempts = 100
 )
 
 // init send queue
@@ -111,7 +112,7 @@ func (s *sendQueue) retransmit(ch *Channel) {
 			// Resend packet and set new retransmitTime
 			pac.retransmitAttempts++
 			if pac.retransmitAttempts > maxRetransmitAttempts {
-				ch.destroy()
+				ch.destroy(fmt.Sprint("channel max retransmit, destroy ", ch.addr.String()))
 				return
 			}
 			ch.setRetransmitTime(pac)

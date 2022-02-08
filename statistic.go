@@ -9,9 +9,11 @@ package tru
 import (
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/kirill-scherba/stable"
+	"golang.org/x/term"
 )
 
 type statistic struct {
@@ -61,31 +63,60 @@ func (s *statistic) checkActivity(inactive, keepalive func()) {
 func (tru *Tru) PrintStatistic() {
 
 	type statData struct {
-		Addr string  // peer address
-		Send int64   // send packets
-		Ssec int64   // send per second
-		Rsnd int64   // resend packets
-		Recv int64   // receive packets
-		Rsec int64   // receive per second
-		Drop int64   // drop received packets
-		SQ   uint    // send queue length
-		RQ   uint    // receive queue length
-		TT   float64 // trip time
+		Addr  string  // peer address
+		Send  int64   // send packets
+		Ssec  int64   // send per second
+		Rsnd  int64   // resend packets
+		Recv  int64   // receive packets
+		Rsec  int64   // receive per second
+		Drop  int64   // drop received packets
+		SQ    uint    // send queue length
+		RQ    uint    // receive queue length
+		RTA   int     // first packet retransmit attempt
+		Delay int     // client send delay
+		TT    float64 // trip time
 	}
 
-	go func() {
-		start := time.Now()
-		fmt.Print("\033[s") // save the cursor position
-		for {
-			time.Sleep(250 * time.Millisecond)
+	start := time.Now()
+	fmt.Print("\033c")    // clear screen
+	fmt.Print("\033[s")   // save the cursor position
+	fmt.Print("\033[?7l") // no wrap
+
+	var printStat func()
+	var printLog = func(listLen int) {
+		_, h, err := tru.getTermSize()
+
+		from := 0
+		l := len(tru.statLogMsgs)
+		if err == nil {
+			from = l - (h - listLen)
+			if from < 0 {
+				from = 0
+			}
+		}
+		for i := from; i < l; i++ {
+			msg := tru.statLogMsgs[i]
+			fmt.Println("\033[K" + msg)
+		}
+	}
+
+	printStat = func() {
+		tru.statTimer = time.AfterFunc(250*time.Millisecond, func() {
 
 			var stat []statData
 			// var aligns = []int{0, 0, 0, 1}
 			var st = new(stable.Stable)
 
 			tru.m.RLock()
+			listLen := 0
 			for _, ch := range tru.cannels {
-				sec := int64(time.Since(ch.stat.started).Seconds())
+				listLen++
+				var sec = int64(time.Since(ch.stat.started).Seconds())
+				var rta int
+				pac := ch.sendQueue.getFirst()
+				if pac != nil {
+					rta = pac.retransmitAttempts
+				}
 				stat = append(stat, statData{
 					Addr: ch.addr.String(),
 					Send: ch.stat.send,
@@ -103,10 +134,12 @@ func (tru *Tru) PrintStatistic() {
 						}
 						return ch.stat.recv / sec
 					}(),
-					Drop: ch.stat.drop,
-					SQ:   uint(ch.sendQueue.len()),
-					RQ:   uint(ch.recvQueue.len()),
-					TT:   float64(ch.stat.tripTime.Microseconds()) / 1000.0,
+					Drop:  ch.stat.drop,
+					SQ:    uint(ch.sendQueue.len()),
+					RQ:    uint(ch.recvQueue.len()),
+					RTA:   rta,
+					Delay: ch.delay,
+					TT:    float64(ch.stat.tripTime.Microseconds()) / 1000.0,
 				})
 			}
 			tru.m.RUnlock()
@@ -117,7 +150,8 @@ func (tru *Tru) PrintStatistic() {
 
 			fmt.Print("\033[?25l") // hide cursor
 			fmt.Print("\033[u")    // restore the cursor position
-			fmt.Printf("\033[KTRU %s, RCh: %d, SCh: %d, time: %v:\n%s\n\033[K",
+			// fmt.Print("\033[K")    // clear line
+			fmt.Printf("TRU %s, RCH: %d, SCH: %d, time: %v\n\n%s\n\033[K",
 				tru.LocalAddr().String(),
 				len(tru.readerCh),
 				len(tru.senderCh),
@@ -125,7 +159,34 @@ func (tru *Tru) PrintStatistic() {
 
 				st.StructToTable(stat), // aligns...),
 			)
-			fmt.Print("\033[?25h") // show cursor
-		}
-	}()
+
+			fmt.Println(strings.Repeat("-", 90))
+			fmt.Println("\033[K")
+			printLog(listLen + 6)
+
+			// fmt.Print("\033[?25h") // show cursor
+			printStat()
+		})
+	}
+
+	printStat()
+}
+
+func (tru *Tru) StopPrintStatistic() {
+	if tru.statTimer != nil {
+		tru.statTimer.Stop()
+		fmt.Print("\033[?25h") // show cursor
+		fmt.Print("\033[?7h")  // wrap
+	}
+}
+
+func (tru *Tru) getTermSize() (width, height int, err error) {
+
+	// if term.IsTerminal(0) {
+	// 	println("in a term")
+	// } else {
+	// 	println("not in a term")
+	// }
+	width, height, err = term.GetSize(0)
+	return
 }
