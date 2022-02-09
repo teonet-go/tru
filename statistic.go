@@ -9,7 +9,6 @@ package tru
 import (
 	"fmt"
 	"sort"
-	"strings"
 	"time"
 
 	"github.com/kirill-scherba/stable"
@@ -105,7 +104,7 @@ func (tru *Tru) PrintStatistic() {
 
 			var stat []statData
 			// var aligns = []int{0, 0, 0, 1}
-			var st = new(stable.Stable)
+			var st = new(stable.Stable).Lines()
 
 			tru.m.RLock()
 			listLen := 0
@@ -160,7 +159,6 @@ func (tru *Tru) PrintStatistic() {
 				st.StructToTable(stat), // aligns...),
 			)
 
-			fmt.Println(strings.Repeat("-", 90))
 			fmt.Println("\033[K")
 			printLog(listLen + 6)
 
