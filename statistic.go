@@ -139,8 +139,11 @@ func (tru *Tru) statToString(cleanLine bool) (table string, numRows int) {
 	formats[11] = "%.3f"
 	st := new(stable.Stable).Lines().
 		Aligns(0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1).
-		Totals(&statData{}, 0, 1, 1, 1, 1, 1, 1).
 		Formats(formats...)
+	if tru.numChannels() > 1 {
+		st.Totals(&statData{}, 0, 1, 1, 1, 1, 1, 1)
+		numRows = 1
+	}
 	if cleanLine {
 		st.CleanLine()
 	}
@@ -193,7 +196,6 @@ func (tru *Tru) statToString(cleanLine bool) (table string, numRows int) {
 	if numRows > 0 {
 		numRows += 3 // lines
 		numRows += 1 // title
-		numRows += 1 // totals
 	}
 	return
 }

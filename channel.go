@@ -29,12 +29,6 @@ type Channel struct {
 
 // const MaxUint16 = ^uint16(0)
 
-func (tru *Tru) addToMsgsLog(msg string) {
-	const layout = "2006-01-02 15:04:05"
-	msg = fmt.Sprintf("%v %s", time.Now().Format(layout), msg)
-	tru.statLogMsgs = append(tru.statLogMsgs, msg)
-}
-
 // NewChannel create new tru channel by address
 func (tru *Tru) newChannel(addr net.Addr, serverMode ...bool) (ch *Channel, err error) {
 	tru.m.Lock()
@@ -77,6 +71,39 @@ func (tru *Tru) getChannel(addr string) (ch *Channel, ok bool) {
 
 	ch, ok = tru.cannels[addr]
 	return
+}
+
+// numChannels return number of channels
+func (tru *Tru) numChannels() int {
+	tru.m.RLock()
+	defer tru.m.RUnlock()
+	return len(tru.cannels)
+}
+
+// addToMsgsLog add message to log
+func (tru *Tru) addToMsgsLog(msg string) {
+	const layout = "2006-01-02 15:04:05"
+	msg = fmt.Sprintf("%v %s", time.Now().Format(layout), msg)
+	tru.statLogMsgs = append(tru.statLogMsgs, msg)
+}
+
+// destroy destroy channel
+func (ch *Channel) destroy(msg string) {
+	if ch == nil {
+		return
+	}
+
+	ch.tru.m.Lock()
+	defer ch.tru.m.Unlock()
+
+	log.Println("channel destroy", ch.addr.String())
+
+	ch.stat.checkActivityTimer.Stop()
+	ch.sendQueue.retransmitTimer.Stop()
+	ch.stat.destroyed = true
+
+	delete(ch.tru.cannels, ch.addr.String())
+	ch.tru.addToMsgsLog(msg)
 }
 
 // Addr return channel address
@@ -177,23 +204,4 @@ func (ch *Channel) setRetransmitTime(pac *Packet) (tt time.Time, err error) {
 	pac.time = time.Now()
 
 	return
-}
-
-// destroy destroy channel
-func (ch *Channel) destroy(msg string) {
-	if ch == nil {
-		return
-	}
-
-	ch.tru.m.Lock()
-	defer ch.tru.m.Unlock()
-
-	log.Println("channel destroy", ch.addr.String())
-
-	ch.stat.checkActivityTimer.Stop()
-	ch.sendQueue.retransmitTimer.Stop()
-	ch.stat.destroyed = true
-
-	delete(ch.tru.cannels, ch.addr.String())
-	ch.tru.addToMsgsLog(msg)
 }
