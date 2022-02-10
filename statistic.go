@@ -103,8 +103,14 @@ func (tru *Tru) PrintStatistic() {
 		tru.statTimer = time.AfterFunc(250*time.Millisecond, func() {
 
 			var stat []statData
-			// var aligns = []int{0, 0, 0, 1}
-			var st = new(stable.Stable).Lines()
+			aligns := []int{0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}
+			var formats = make([]string, 12)
+			formats[2] = "%5d"
+			formats[5] = "%5d"
+			formats[11] = "%.3f"
+
+			var st = new(stable.Stable).Lines().CleanLine(true).Aligns(aligns...).
+				Formats(formats...).Totals(&statData{}, 0, 1, 1, 1, 1, 1, 1)
 
 			tru.m.RLock()
 			listLen := 0
