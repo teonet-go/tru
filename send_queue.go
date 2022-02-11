@@ -96,7 +96,7 @@ func (s *sendQueue) len() int {
 
 // retransmit packets from send queue
 func (s *sendQueue) retransmit(ch *Channel) {
-	s.retransmitTimer = time.AfterFunc(minRTT, func() {
+	s.retransmitTimer = time.AfterFunc( /* minRTT */ 100*time.Millisecond, func() {
 
 		s.RLock()
 		defer s.RUnlock()
