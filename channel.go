@@ -123,12 +123,41 @@ func (ch *Channel) writeTo(data []byte, status int, ids ...int) (err error) {
 		return
 	}
 
+	// Calculate and execute delay for client mode data packets
+	if !ch.serverMode && status == statusData {
+		delay := time.Duration(ch.delay) * time.Microsecond
+
+		var chDelay = ch.delay
+		if pac := ch.sendQueue.getFirst(); pac != nil {
+			if rta := pac.retransmitAttempts; rta > 0 {
+				delay += 100000 // 100 ms delay if retransmit attempt
+				chDelay = ch.delay + 1
+			}
+		} else {
+			if ch.delay > 20 {
+				chDelay = ch.delay - 1
+			}
+		}
+		if time.Since(ch.stat.lastDelayCheck) > 100*time.Millisecond {
+			ch.stat.lastDelayCheck = time.Now()
+			ch.delay = chDelay
+		}
+
+		if since := time.Since(ch.stat.lastSend); since < delay {
+			time.Sleep(delay - since)
+		}
+
+		ch.stat.lastSend = time.Now()
+	}
+
+	// Set packet id
 	var id = 0
 	if len(ids) > 0 {
 		id = ids[0]
 	}
 
 	ch.tru.senderCh <- senderChData{ch, data, status, id}
+
 	return
 }
 
@@ -191,9 +220,9 @@ func (ch *Channel) setRetransmitTime(pac *Packet) (tt time.Time, err error) {
 		rtt += ch.stat.tripTime
 	}
 
-	if pac.retransmitAttempts > 0 {
-		rtt *= time.Duration(pac.retransmitAttempts + 1)
-	}
+	// if pac.retransmitAttempts > 0 {
+	// 	rtt *= time.Duration(pac.retransmitAttempts + 1)
+	// }
 
 	if rtt > maxRTT {
 		rtt = maxRTT

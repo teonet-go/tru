@@ -93,6 +93,6 @@ connect:
 		}
 		log.Printf("send %d bytes data to %s, data: %s\n", len(data), ch.Addr().String(), data)
 
-		time.Sleep(time.Duration(*delay) * time.Microsecond)
+		// time.Sleep(time.Duration(*delay) * time.Microsecond)
 	}
 }

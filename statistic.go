@@ -19,6 +19,8 @@ type statistic struct {
 	destroyed          bool
 	started            time.Time
 	lastActivity       time.Time
+	lastSend           time.Time
+	lastDelayCheck     time.Time
 	checkActivityTimer *time.Timer
 
 	tripTime   time.Duration
