@@ -125,24 +125,39 @@ func (ch *Channel) writeTo(data []byte, status int, ids ...int) (err error) {
 
 	// Calculate and execute delay for client mode data packets
 	if !ch.serverMode && status == statusData {
+
+		// Get current delay
 		delay := time.Duration(ch.delay) * time.Microsecond
 
+		// Claculate delay
 		var chDelay = ch.delay
 		if pac := ch.sendQueue.getFirst(); pac != nil {
-			if rta := pac.retransmitAttempts; rta > 0 {
-				delay += 100000 // 100 ms delay if retransmit attempt
+
+			// Wait up to 100 ms if fist packet has retransmit attempt
+			var i = 0
+			for rta := pac.retransmitAttempts; rta > 0; i++ {
+				if i >= 10 {
+					break
+				}
+				delay += 10000 // 10 ms delay if retransmit attempt
+			}
+			if i > 0 {
 				chDelay = ch.delay + 1
 			}
+
 		} else {
-			if ch.delay > 20 {
+			if ch.delay > 10 {
 				chDelay = ch.delay - 1
 			}
 		}
-		if time.Since(ch.stat.lastDelayCheck) > 100*time.Millisecond {
+
+		// Change delay
+		if time.Since(ch.stat.lastDelayCheck) > 50*time.Millisecond {
 			ch.stat.lastDelayCheck = time.Now()
 			ch.delay = chDelay
 		}
 
+		// Execute delay
 		if since := time.Since(ch.stat.lastSend); since < delay {
 			time.Sleep(delay - since)
 		}
