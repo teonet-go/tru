@@ -119,7 +119,7 @@ func (s *sendQueue) retransmit(ch *Channel) {
 			data, _ := pac.MarshalBinary()
 			ch.tru.writeTo(data, ch.addr)
 			ch.stat.retransmit++
-			log.Println("!!!  retransmit id:", pac.ID(), "sq:", len(s.index))
+			// log.Println("!!!  retransmit id:", pac.ID(), "sq:", len(s.index))
 
 			// Does not retranmit another packets if this has more than 1
 			// retransmit attempts

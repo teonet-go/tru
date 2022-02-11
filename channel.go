@@ -130,25 +130,29 @@ func (ch *Channel) writeTo(data []byte, status int, ids ...int) (err error) {
 		delay := time.Duration(ch.delay) * time.Microsecond
 
 		// Claculate delay
+		var i = 0
 		var chDelay = ch.delay
 		if pac := ch.sendQueue.getFirst(); pac != nil {
 
 			// Wait up to 100 ms if fist packet has retransmit attempt
-			var i = 0
 			for rta := pac.retransmitAttempts; rta > 0; i++ {
 				if i >= 10 {
 					break
 				}
-				delay += 10000 // 10 ms delay if retransmit attempt
-			}
-			if i > 0 {
-				chDelay = ch.delay + 1
-			}
 
-		} else {
-			if ch.delay > 10 {
+				// 10 ms delay if retransmit attempt
+				time.Sleep(10000 * time.Microsecond)
+			}
+		}
+		if i == 0 {
+			switch {
+			case ch.delay > 100:
+				chDelay = ch.delay - 10
+			case ch.delay > 30:
 				chDelay = ch.delay - 1
 			}
+		} else {
+			chDelay = ch.delay + 10
 		}
 
 		// Change delay
@@ -235,9 +239,9 @@ func (ch *Channel) setRetransmitTime(pac *Packet) (tt time.Time, err error) {
 		rtt += ch.stat.tripTime
 	}
 
-	// if pac.retransmitAttempts > 0 {
-	// 	rtt *= time.Duration(pac.retransmitAttempts + 1)
-	// }
+	if pac.retransmitAttempts > 0 {
+		rtt *= time.Duration(pac.retransmitAttempts + 1)
+	}
 
 	if rtt > maxRTT {
 		rtt = maxRTT
