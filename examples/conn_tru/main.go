@@ -9,6 +9,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/kirill-scherba/tru"
@@ -39,6 +40,9 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	defer tru.Close()
+
+	// Set default send delay
 	tru.SetSendDelay(*delay)
 
 	// Send packets if addr flag set
@@ -47,16 +51,18 @@ func main() {
 	// Print statistic if -stat flag is on
 	if *stat {
 		tru.PrintStatistic()
-		defer tru.StopPrintStatistic()
-		c := make(chan os.Signal, 1)
-		signal.Notify(c, os.Interrupt)
-		for range c {
-			// sig is a ^C, handle it
-			return
-		}
 	}
 
-	select {}
+	// React to Ctrl+C
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt)
+	signal.Notify(c, syscall.SIGTERM)
+	for range c {
+		// sig is a ^C, handle it
+		return
+	}
+
+	// select {}
 }
 
 // Reader read packets from connected peers

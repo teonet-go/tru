@@ -105,6 +105,13 @@ func (ch *Channel) destroy(msg string) {
 	ch.tru.addToMsgsLog(msg)
 }
 
+// Close tru channel
+func (ch *Channel) Close() {
+	ch.writeToDisconnect()
+	// time.Sleep(minRTT)
+	ch.destroy(fmt.Sprint("channel close, destroy ", ch.addr.String()))
+}
+
 // Addr return channel address
 func (ch *Channel) Addr() net.Addr {
 	return ch.addr
@@ -187,6 +194,13 @@ func (ch *Channel) writeTo(data []byte, status int, ids ...int) (err error) {
 		ch.stat.setSend()
 	}
 
+	// Send disconnect immediately
+	if status == statusDisconnect {
+		data, _ := pac.MarshalBinary()
+		ch.tru.writeTo(data, ch.addr)
+		return
+	}
+
 	// Drop packet for testing if drop flag is set. Drops every value of
 	// drop packet. If drop contain 5 than every 5th packet will be dropped
 	if *drop > 0 && status == statusData && !ch.serverMode && rand.Intn(*drop) == 0 {
@@ -210,9 +224,14 @@ func (ch *Channel) writeToPong() (err error) {
 	return ch.writeTo(nil, statusPong)
 }
 
-// writeToAck writes ack to packet to channel
+// writeToAck writes ack packet to channel
 func (ch *Channel) writeToAck(pac *Packet) (err error) {
 	return ch.writeTo(nil, statusAck, pac.ID())
+}
+
+// writeToDisconnect write disconnect packet
+func (ch *Channel) writeToDisconnect() (err error) {
+	return ch.writeTo(nil, statusDisconnect)
 }
 
 // writeToSender write packet to sender proccess channel

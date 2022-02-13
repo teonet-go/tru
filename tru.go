@@ -63,6 +63,20 @@ func New(port int, reader ...ReaderFunc) (tru *Tru, err error) {
 	return
 }
 
+// Close write close to all connected channels
+func (tru *Tru) Close() {
+	tru.m.RLock()
+	for _, ch := range tru.cannels {
+		tru.m.RUnlock()
+		ch.Close()
+		tru.Close()
+		return
+	}
+	tru.m.RUnlock()
+	tru.conn.Close()
+	tru.StopPrintStatistic()
+}
+
 func (tru *Tru) SetSendDelay(delay int) {
 	tru.delay = delay
 }
@@ -150,6 +164,10 @@ func (tru *Tru) serve(n int, addr net.Addr, data []byte) {
 		log.Printf("got ack to packet id %d, trip time: %.3f ms", pac.ID(), float64(tt.Microseconds())/1000.0)
 		ch.sendQueue.delete(pac.ID())
 
+	case statusDisconnect:
+		ch.destroy(fmt.Sprint("channel disconnect received, destroy ", ch.addr.String()))
+		return
+
 	case statusData:
 		dist := pac.distance(ch.expectedID, pac.id)
 		ch.writeToAck(pac)
@@ -194,6 +212,11 @@ type readerChData struct {
 // readerProccess process received tru packets
 func (tru *Tru) readerProccess() {
 	for r := range tru.readerCh {
+
+		// Check channel destroyed
+		if r.ch.stat.destroyed {
+			continue
+		}
 
 		// Execute channel reader
 		if r.ch.reader != nil {
