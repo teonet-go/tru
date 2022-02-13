@@ -45,9 +45,7 @@ func (tru *Tru) newChannel(addr net.Addr, serverMode ...bool) (ch *Channel, err 
 	}
 	ch.sendQueue.init(ch)
 	ch.recvQueue.init(ch)
-	ch.stat.started = time.Now()
-	ch.stat.setLastActivity()
-	ch.stat.checkActivity(
+	ch.stat.init(
 		// Inactive
 		func() {
 			ch.destroy(fmt.Sprint("channel inactive, destroy ", ch.addr.String()))
@@ -59,7 +57,8 @@ func (tru *Tru) newChannel(addr net.Addr, serverMode ...bool) (ch *Channel, err 
 			}
 			log.Println("channel ping", ch.addr.String())
 			ch.writeToPing()
-		})
+		},
+	)
 
 	tru.cannels[addr.String()] = ch
 	return
@@ -99,9 +98,8 @@ func (ch *Channel) destroy(msg string) {
 
 	log.Println("channel destroy", ch.addr.String())
 
-	ch.stat.checkActivityTimer.Stop()
 	ch.sendQueue.retransmitTimer.Stop()
-	ch.stat.destroyed = true
+	ch.stat.destroy()
 
 	delete(ch.tru.cannels, ch.addr.String())
 	ch.tru.addToMsgsLog(msg)
@@ -186,7 +184,7 @@ func (ch *Channel) writeTo(data []byte, status int, ids ...int) (err error) {
 	if status == statusData {
 		ch.setRetransmitTime(pac)
 		ch.sendQueue.add(pac)
-		ch.stat.send++
+		ch.stat.setSend()
 	}
 
 	// Drop packet for testing if drop flag is set. Drops every value of

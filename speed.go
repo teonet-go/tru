@@ -19,10 +19,8 @@ type speed struct {
 }
 
 // newSpeed create new packet speed calculator
-func (tru *Tru) newSpeed() (s *speed) {
-	s = &speed{}
+func (s *speed) init() {
 	s.process()
-	return
 }
 
 // destroy packet speed calculator
@@ -42,7 +40,7 @@ func (s *speed) add(count ...bool) {
 	now := time.Now()
 	unixNano := now.UnixNano()
 	umillisec := unixNano / 1000000
-	i := int(umillisec % 100)
+	i := int((umillisec / 100) % 10)
 	if i != s.current {
 		s.sumArray[s.current] = s.currentSum
 		speed := 0

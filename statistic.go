@@ -29,6 +29,8 @@ type statistic struct {
 	retransmit    int64
 	recv          int64
 	drop          int64
+	sendSpeed     speed
+	recvSpeed     speed
 }
 
 const (
@@ -36,6 +38,35 @@ const (
 	pingInactiveAfter       = 4 * time.Second
 	disconnectInactiveAfter = 5 * time.Second
 )
+
+// init statistic
+func (s *statistic) init(inactive, keepalive func()) {
+	s.started = time.Now()
+	s.setLastActivity()
+	s.checkActivity(inactive, keepalive)
+	s.sendSpeed.init()
+	s.recvSpeed.init()
+}
+
+// destroy statistic
+func (s *statistic) destroy() {
+	s.checkActivityTimer.Stop()
+	s.sendSpeed.destroy()
+	s.recvSpeed.destroy()
+	s.destroyed = true
+}
+
+// setSend set one packet send
+func (s *statistic) setSend() {
+	s.send++
+	s.sendSpeed.add()
+}
+
+// setRecv set one packet received
+func (s *statistic) setRecv() {
+	s.recv++
+	s.recvSpeed.add()
+}
 
 // setLastActivity set channels last activity time
 func (s *statistic) setLastActivity() {
@@ -156,29 +187,18 @@ func (tru *Tru) statToString(cleanLine bool) (table string, numRows int) {
 	var stat []statData
 	for _, ch := range tru.cannels {
 		numRows++
-		var sec = int64(time.Since(ch.stat.started).Seconds())
 		var rta int
 		pac := ch.sendQueue.getFirst()
 		if pac != nil {
 			rta = pac.retransmitAttempts
 		}
 		stat = append(stat, statData{
-			Addr: ch.addr.String(),
-			Send: ch.stat.send,
-			Ssec: func() int64 {
-				if sec == 0 {
-					return 0
-				}
-				return ch.stat.send / sec
-			}(),
-			Rsnd: ch.stat.retransmit,
-			Recv: ch.stat.recv,
-			Rsec: func() int64 {
-				if sec == 0 {
-					return 0
-				}
-				return ch.stat.recv / sec
-			}(),
+			Addr:  ch.addr.String(),
+			Send:  ch.stat.send,
+			Ssec:  int64(ch.stat.sendSpeed.get()),
+			Rsnd:  ch.stat.retransmit,
+			Recv:  ch.stat.recv,
+			Rsec:  int64(ch.stat.recvSpeed.get()),
 			Drop:  ch.stat.drop,
 			SQ:    uint(ch.sendQueue.len()),
 			RQ:    uint(ch.recvQueue.len()),

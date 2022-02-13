@@ -68,7 +68,7 @@ func (r *receiveQueue) process(ch *Channel, send func(ch *Channel, pac *Packet))
 	}
 	send(ch, pac)
 	ch.newExpectedID()
-	ch.stat.recv++
+	ch.stat.setRecv()
 	ch.recvQueue.delete(id)
 
 	return r.process(ch, send)

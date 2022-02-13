@@ -174,7 +174,7 @@ func (tru *Tru) serve(n int, addr net.Addr, data []byte) {
 			}
 			sendToReader(ch, pac)
 			ch.newExpectedID()
-			ch.stat.recv++
+			ch.stat.setRecv()
 
 			ch.recvQueue.process(ch, sendToReader)
 		}
