@@ -110,12 +110,8 @@ func (c *connect) serve(tru *Tru, addr net.Addr, pac *Packet) (err error) {
 		if err != nil {
 			return
 		}
-		var data []byte
-		data, err = tru.newPacket().SetStatus(statusConnectAnswer).SetData(pac.Data()).MarshalBinary()
-		if err != nil {
-			return
-		}
-		err = tru.writeTo(data, ch.addr)
+		pac = tru.newPacket().SetStatus(statusConnectAnswer).SetData(pac.Data())
+		ch.writeToSender(pac)
 
 	case statusConnectAnswer:
 		cd, ok := c.get(string(pac.Data()))

@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"math/rand"
 	"net"
 	"time"
 )
@@ -174,8 +175,29 @@ func (ch *Channel) writeTo(data []byte, status int, ids ...int) (err error) {
 	if len(ids) > 0 {
 		id = ids[0]
 	}
+	if status == statusData {
+		id = ch.newID()
+	}
 
-	ch.tru.senderCh <- senderChData{ch, data, status, id}
+	// Create packet
+	pac := ch.tru.newPacket().SetID(id).SetStatus(status).SetData(data)
+
+	// Add data packet to send queue and Set packet retransmit time
+	if status == statusData {
+		ch.setRetransmitTime(pac)
+		ch.sendQueue.add(pac)
+		ch.stat.send++
+	}
+
+	// Drop packet for testing if drop flag is set. Drops every value of
+	// drop packet. If drop contain 5 than every 5th packet will be dropped
+	if *drop > 0 && status == statusData && !ch.serverMode && rand.Intn(*drop) == 0 {
+		return
+	}
+
+	// Send to write channel
+	// ch.tru.senderCh <- senderChData{ch, pac}
+	ch.writeToSender(pac)
 
 	return
 }
@@ -193,6 +215,11 @@ func (ch *Channel) writeToPong() (err error) {
 // writeToAck writes ack to packet to channel
 func (ch *Channel) writeToAck(pac *Packet) (err error) {
 	return ch.writeTo(nil, statusAck, pac.ID())
+}
+
+// writeToSender write packet to sender proccess channel
+func (ch *Channel) writeToSender(pac *Packet) {
+	ch.tru.senderCh <- senderChData{ch, pac}
 }
 
 // newID create new channels packet id

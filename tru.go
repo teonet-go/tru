@@ -9,7 +9,6 @@ import (
 	"flag"
 	"fmt"
 	"log"
-	"math/rand"
 	"net"
 	"strconv"
 	"sync"
@@ -211,53 +210,23 @@ func (tru *Tru) readerProccess() {
 }
 
 type senderChData struct {
-	ch     *Channel
-	data   []byte
-	status int
-	id     int
+	ch  *Channel
+	pac *Packet
 }
 
 // senderProccess process sended tru packets
 func (tru *Tru) senderProccess() {
 	for r := range tru.senderCh {
 
+		// Check channel destroyed
 		if r.ch.stat.destroyed {
 			continue
 		}
 
-		// Create and marshal packet
-		id := r.id
-		if r.status == statusData {
-			id = r.ch.newID()
-		}
-		pac := tru.newPacket().SetID(id).SetStatus(r.status).SetData(r.data)
-		data, err := pac.MarshalBinary()
+		// Marshal packet
+		data, err := r.pac.MarshalBinary()
 		if err != nil {
 			return
-		}
-
-		// Add data packet to send queue and Set packet retransmit time
-		if r.status == statusData {
-			r.ch.setRetransmitTime(pac)
-			r.ch.sendQueue.add(pac)
-			r.ch.stat.send++
-		}
-
-		// Does not write packet to channel if first element has
-		// retransmitAttempts. This packet allready added to send queue and will
-		// be transmitted later
-		if r.status == statusData {
-			p := r.ch.sendQueue.getFirst()
-			if p != nil && p.retransmitAttempts > 0 {
-				// r.ch.stat.retransmit--
-				// continue
-			}
-		}
-
-		// Drop packet for testing ig drop flag is set. Drops every value of
-		// drop packet. If drop contain 5 than every 5th packet will be dropped
-		if *drop > 0 && r.status == statusData && !r.ch.serverMode && rand.Intn(*drop) == 0 {
-			continue
 		}
 
 		// Write packet to addr
