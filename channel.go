@@ -16,16 +16,17 @@ import (
 )
 
 type Channel struct {
-	addr       net.Addr     // Peer address
-	serverMode bool         // Server mode if true
-	id         uint16       // Next send ID
-	expectedID uint16       // Next expected ID
-	reader     ReaderFunc   // Channels reader
-	delay      int          // Client send delay
-	stat       statistic    // Statictic struct and receiver
-	sendQueue  sendQueue    // Send queue
-	recvQueue  receiveQueue // Receive queue
-	tru        *Tru         // Pointer to tru
+	addr       net.Addr      // Peer address
+	serverMode bool          // Server mode if true
+	id         uint16        // Next send ID
+	expectedID uint16        // Next expected ID
+	reader     ReaderFunc    // Channels reader
+	delay      int           // Client send delay
+	stat       statistic     // Statictic struct and receiver
+	sendQueue  sendQueue     // Send queue
+	recvQueue  receiveQueue  // Receive queue
+	tru        *Tru          // Pointer to tru
+	combine    combinePacket // Combine lage packet
 }
 
 // const MaxUint16 = ^uint16(0)
@@ -118,16 +119,20 @@ func (ch *Channel) Addr() net.Addr {
 }
 
 // WriteTo writes a packet with data to channel
-func (ch *Channel) WriteTo(data []byte) (err error) {
-	return ch.writeTo(data, statusData)
+func (ch *Channel) WriteTo(data []byte) (id int, err error) {
+	return ch.splitPacket(data, func(data []byte, split int) (int, error) {
+		return ch.writeTo(data, statusData|split)
+	})
 }
 
 // writeTo writes a packet with status and data to channel
-func (ch *Channel) writeTo(data []byte, status int, ids ...int) (err error) {
+func (ch *Channel) writeTo(data []byte, stat int, ids ...int) (id int, err error) {
 	if ch.stat.destroyed {
 		err = errors.New("channel destroyed")
 		return
 	}
+
+	status := stat &^ statusSplit
 
 	// Calculate and execute delay for client mode data packets
 	if !ch.serverMode && status == statusData {
@@ -176,7 +181,7 @@ func (ch *Channel) writeTo(data []byte, status int, ids ...int) (err error) {
 	}
 
 	// Set packet id
-	var id = 0
+	id = 0
 	if len(ids) > 0 {
 		id = ids[0]
 	}
@@ -185,13 +190,15 @@ func (ch *Channel) writeTo(data []byte, status int, ids ...int) (err error) {
 	}
 
 	// Create packet
-	pac := ch.tru.newPacket().SetID(id).SetStatus(status).SetData(data)
+	pac := ch.tru.newPacket().SetID(id).SetStatus(stat).SetData(data)
 
 	// Add data packet to send queue and Set packet retransmit time
 	if status == statusData {
 		ch.setRetransmitTime(pac)
 		ch.sendQueue.add(pac)
-		ch.stat.setSend()
+		if stat == statusData {
+			ch.stat.setSend()
+		}
 	}
 
 	// Send disconnect immediately
@@ -216,22 +223,26 @@ func (ch *Channel) writeTo(data []byte, status int, ids ...int) (err error) {
 
 // writeToPing writes ping packet to channel
 func (ch *Channel) writeToPing() (err error) {
-	return ch.writeTo(nil, statusPing)
+	_, err = ch.writeTo(nil, statusPing)
+	return
 }
 
 // writeToPong writes pong packet to channel
 func (ch *Channel) writeToPong() (err error) {
-	return ch.writeTo(nil, statusPong)
+	_, err = ch.writeTo(nil, statusPong)
+	return
 }
 
 // writeToAck writes ack packet to channel
 func (ch *Channel) writeToAck(pac *Packet) (err error) {
-	return ch.writeTo(nil, statusAck, pac.ID())
+	_, err = ch.writeTo(nil, statusAck, pac.ID())
+	return
 }
 
 // writeToDisconnect write disconnect packet
 func (ch *Channel) writeToDisconnect() (err error) {
-	return ch.writeTo(nil, statusDisconnect)
+	_, err = ch.writeTo(nil, statusDisconnect)
+	return
 }
 
 // writeToSender write packet to sender proccess channel

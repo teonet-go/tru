@@ -168,7 +168,7 @@ func (tru *Tru) serve(n int, addr net.Addr, data []byte) {
 		ch.destroy(fmt.Sprint("channel disconnect received, destroy ", ch.addr.String()))
 		return
 
-	case statusData:
+	case statusData, statusDataNext:
 		dist := pac.distance(ch.expectedID, pac.id)
 		ch.writeToAck(pac)
 		switch {
@@ -188,11 +188,14 @@ func (tru *Tru) serve(n int, addr net.Addr, data []byte) {
 		case dist == 0:
 			// Send packet to reader process and process receive queue
 			sendToReader := func(ch *Channel, pac *Packet) {
-				tru.readerCh <- readerChData{ch, pac, nil}
+				pac = ch.combine.packet(pac)
+				if pac != nil {
+					tru.readerCh <- readerChData{ch, pac, nil}
+					ch.stat.setRecv()
+				}
 			}
 			sendToReader(ch, pac)
 			ch.newExpectedID()
-			ch.stat.setRecv()
 
 			ch.recvQueue.process(ch, sendToReader)
 		}

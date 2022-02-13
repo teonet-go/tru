@@ -3,6 +3,7 @@
 package main
 
 import (
+	"crypto/rand"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -20,6 +21,7 @@ var addr = flag.String("a", "", "remote address to connect to")
 var nolog = flag.Bool("nolog", false, "disable log messages")
 var stat = flag.Bool("stat", false, "print statistic")
 var delay = flag.Int("delay", 0, "send delay in Microseconds")
+var sendlen = flag.Int("sendlen", 0, "send packet data length")
 
 func main() {
 
@@ -91,8 +93,16 @@ connect:
 	}
 
 	for i := 0; ; i++ {
-		data := []byte(fmt.Sprintf("data %d", i))
-		err := ch.WriteTo(data)
+
+		var data []byte
+		if *sendlen == 0 {
+			data = []byte(fmt.Sprintf("data %d", i))
+		} else {
+			data = make([]byte, *sendlen)
+			rand.Read(data)
+		}
+
+		_, err := ch.WriteTo(data)
 		if err != nil {
 			log.Println(err)
 			goto connect

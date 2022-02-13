@@ -29,6 +29,12 @@ const (
 	statusPing
 	statusPong
 	statusDisconnect
+	statusSplit    = 0x80
+	statusDataNext = statusData + statusSplit
+)
+
+const (
+	maxUdpDataLength = 65527 // Max packet 65535 - 8 byte header
 )
 
 // newPacket create new empty packet
@@ -70,6 +76,12 @@ func (p *Packet) HeaderLen() int {
 	// id 		- 2 byte
 	// status	- 1 byte
 	return 3
+}
+
+// Len get packet length
+func (p *Packet) MaxDataLen() int {
+	return maxUdpDataLength - p.HeaderLen()
+	// return 512 // look like optimal packet data length 
 }
 
 // Len get packet length
