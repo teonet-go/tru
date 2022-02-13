@@ -23,11 +23,12 @@ type statistic struct {
 	lastDelayCheck     time.Time
 	checkActivityTimer *time.Timer
 
-	tripTime   time.Duration
-	send       int64
-	retransmit int64
-	recv       int64
-	drop       int64
+	tripTime      time.Duration
+	tripTimeMidle time.Duration
+	send          int64
+	retransmit    int64
+	recv          int64
+	drop          int64
 }
 
 const (
@@ -183,7 +184,7 @@ func (tru *Tru) statToString(cleanLine bool) (table string, numRows int) {
 			RQ:    uint(ch.recvQueue.len()),
 			RTA:   rta,
 			Delay: ch.delay,
-			TT:    float64(ch.stat.tripTime.Microseconds()) / 1000.0,
+			TT:    float64(ch.getTripTime().Microseconds()) / 1000.0,
 		})
 	}
 	tru.m.RUnlock()

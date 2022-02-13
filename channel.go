@@ -253,17 +253,24 @@ func (ch *Channel) setTripTime(id int) (tt time.Duration, err error) {
 	}
 	tt = time.Since(pac.time)
 	ch.stat.tripTime = tt
+	ch.stat.tripTimeMidle = (ch.stat.tripTimeMidle*9 + tt) / 10
+
 	return
+}
+
+// getTripTime return current channel trip time
+func (ch *Channel) getTripTime() time.Duration {
+	return ch.stat.tripTimeMidle
 }
 
 // setRetransmitTime set retransmit time to packet
 func (ch *Channel) setRetransmitTime(pac *Packet) (tt time.Time, err error) {
 	rtt := minRTT
 
-	if ch.stat.tripTime == 0 {
+	if ch.getTripTime() == 0 {
 		rtt = startRTT
 	} else {
-		rtt += ch.stat.tripTime
+		rtt += ch.getTripTime()
 	}
 
 	if pac.retransmitAttempts > 0 {
