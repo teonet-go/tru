@@ -10,19 +10,25 @@ package tru
 func (ch *Channel) splitPacket(data []byte, writeTo func(data []byte, split int) (int, error)) (rid int, err error) {
 	var id int
 	var pac Packet
+	var maxDataLen = func() int {
+		if ch.maxDataLen != 0 {
+			return ch.maxDataLen
+		}
+		return pac.MaxDataLen()
+	}()
 	for i := 0; ; i++ {
-		if len(data) <= pac.MaxDataLen() {
+		if len(data) <= maxDataLen {
 			id, err = writeTo(data, 0)
 			if i == 0 {
 				rid = id
 			}
 			break
 		}
-		rid, err = writeTo(data[:pac.MaxDataLen()], statusSplit)
+		rid, err = writeTo(data[:maxDataLen], statusSplit)
 		if err != nil {
 			return
 		}
-		data = data[pac.MaxDataLen():]
+		data = data[maxDataLen:]
 	}
 	return
 }

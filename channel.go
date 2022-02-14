@@ -27,6 +27,7 @@ type Channel struct {
 	recvQueue  receiveQueue  // Receive queue
 	tru        *Tru          // Pointer to tru
 	combine    combinePacket // Combine lage packet
+	maxDataLen int           // Max data len in created packets
 	*crypt                   // Crypt module
 }
 
@@ -41,7 +42,7 @@ func (tru *Tru) newChannel(addr net.Addr, serverMode ...bool) (ch *Channel, err 
 	log.Println(msg)
 	tru.addToMsgsLog(msg)
 
-	ch = &Channel{addr: addr, tru: tru, delay: tru.delay}
+	ch = &Channel{addr: addr, tru: tru, delay: tru.delay, maxDataLen: tru.maxDataLen}
 	if len(serverMode) > 0 {
 		ch.serverMode = serverMode[0]
 	}
@@ -185,13 +186,18 @@ func (ch *Channel) writeTo(data []byte, stat int, ids ...int) (id int, err error
 		ch.stat.lastSend = time.Now()
 	}
 
-	// Set packet id
+	// Set packet id and encript data
 	id = 0
 	if len(ids) > 0 {
 		id = ids[0]
 	}
 	if status == statusData {
 		id = ch.newID()
+		data, err = ch.encryptPacketData(id, data)
+		if err != nil {
+			// log.Println("encrypt error:", err)
+			return
+		}
 	}
 
 	// Create packet

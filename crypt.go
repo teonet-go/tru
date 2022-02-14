@@ -117,12 +117,12 @@ func (c crypt) decryptAES(key []byte, data []byte) (out []byte, err error) {
 	return
 }
 
-func (c crypt) encryptPacketData(id uint32, data []byte) (out []byte, err error) {
+func (c crypt) encryptPacketData(id int, data []byte) (out []byte, err error) {
 	if !c.ison() {
 		return data, nil
 	}
 	l := len(data)
-	key := c.packetKey(id, l)
+	key := c.packetKey(uint32(id), l)
 	if l <= 64 {
 		out = make([]byte, len(data))
 		copy(out, data)
@@ -134,12 +134,12 @@ func (c crypt) encryptPacketData(id uint32, data []byte) (out []byte, err error)
 	return
 }
 
-func (c crypt) decryptPacketData(id uint32, data []byte) (out []byte, err error) {
+func (c crypt) decryptPacketData(id int, data []byte) (out []byte, err error) {
 	if !c.ison() {
 		return data, nil
 	}
 	l := len(data)
-	key := c.packetKey(id, l)
+	key := c.packetKey(uint32(id), l)
 	if l <= 64 {
 		c.xorEncryptDecrypt(data, key)
 		return data, nil

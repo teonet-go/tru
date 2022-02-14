@@ -21,6 +21,7 @@ func TestSplitPacket(t *testing.T) {
 		processed = true
 		if pac.ID() == 0 {
 			recvData = pac.Data()
+			// wait <- nil
 		}
 		if pac.ID() >= 1 {
 			wait <- nil
@@ -36,7 +37,6 @@ func TestSplitPacket(t *testing.T) {
 	}
 	tru1Addr := tru1.LocalAddr().String()
 	// log.SetOutput(ioutil.Discard)
-	// tru1.PrintStatistic()
 
 	// create tru2
 	tru2, err := New(0)
@@ -44,6 +44,7 @@ func TestSplitPacket(t *testing.T) {
 		t.Errorf("can't start tru2, err: %s", err)
 		return
 	}
+	tru2.SetMaxDataLen(512)
 
 	// tru2 connect to tru1
 	ch, err := tru2.Connect(tru1Addr)
@@ -52,9 +53,8 @@ func TestSplitPacket(t *testing.T) {
 		return
 	}
 
-	pac := tru1.newPacket()
-	pac.MaxDataLen()
-	var data = make([]byte, pac.MaxDataLen()*33)
+	// pac := tru2.newPacket()
+	var data = make([]byte, 0.5*1024*1024 /* pac.MaxDataLen()*33 */)
 	rand.Read(data)
 	ch.WriteTo(data)
 	log.Println("write data, len", len(data))

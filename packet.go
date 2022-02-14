@@ -36,6 +36,7 @@ const (
 
 const (
 	maxUdpDataLength = 65527 // Max packet 65535 - 8 byte header
+	cryptAESadd      = 28
 )
 
 // newPacket create new empty packet
@@ -81,8 +82,8 @@ func (p *Packet) HeaderLen() int {
 
 // Len get packet length
 func (p *Packet) MaxDataLen() int {
-	return maxUdpDataLength - p.HeaderLen()
-	// return 512 // look like optimal packet data length
+	return maxUdpDataLength - p.HeaderLen() - cryptAESadd
+	// return 1024 // look like optimal packet data length
 }
 
 // Len get packet length

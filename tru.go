@@ -27,6 +27,7 @@ type Tru struct {
 	statLogMsgs []string            // Log messages
 	statTimer   *time.Timer         // Show statistic timer
 	privateKey  *rsa.PrivateKey     // Common private key
+	maxDataLen  int                 // Max data len in created packets, 0 - maximum UDP len
 	m           sync.RWMutex        // Channels map mutex
 }
 
@@ -88,8 +89,18 @@ func (tru *Tru) Close() {
 	tru.StopPrintStatistic()
 }
 
+// SetSendDelay set default (start) clients send delay
 func (tru *Tru) SetSendDelay(delay int) {
 	tru.delay = delay
+}
+
+// SetMaxDataLen set max data len in created packets, 0 - maximum UDP len
+func (tru *Tru) SetMaxDataLen(maxDataLen int) {
+	pac := tru.newPacket()
+	l := pac.MaxDataLen()
+	if maxDataLen < l {
+		tru.maxDataLen = maxDataLen
+	}
 }
 
 // LocalAddr returns the local network address
@@ -183,6 +194,11 @@ func (tru *Tru) serve(n int, addr net.Addr, data []byte) {
 
 	case statusData, statusDataNext:
 		dist := pac.distance(ch.expectedID, pac.id)
+		pac.data, err = ch.decryptPacketData(pac.ID(), pac.Data())
+		if err != nil {
+			// log.Println("decrypt error:", err)
+			return
+		}
 		ch.writeToAck(pac)
 		switch {
 		// Already processed packet (id < expectedID)

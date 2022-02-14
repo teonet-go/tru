@@ -22,6 +22,7 @@ var nolog = flag.Bool("nolog", false, "disable log messages")
 var stat = flag.Bool("stat", false, "print statistic")
 var delay = flag.Int("delay", 0, "send delay in Microseconds")
 var sendlen = flag.Int("sendlen", 0, "send packet data length")
+var datalen = flag.Int("datalen", 0, "set max data len in created packets, 0 - maximum UDP len")
 
 func main() {
 
@@ -43,6 +44,7 @@ func main() {
 		log.Fatal(err)
 	}
 	defer tru.Close()
+	tru.SetMaxDataLen(*datalen)
 
 	// Set default send delay
 	tru.SetSendDelay(*delay)
