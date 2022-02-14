@@ -170,6 +170,8 @@ func (tru *Tru) statToString(cleanLine bool) (table string, numRows int) {
 	formats := make([]string, 12)
 	formats[2] = "%5d"
 	formats[5] = "%5d"
+	formats[7] = "%3d"
+	formats[8] = "%3d"
 	formats[11] = "%.3f"
 	st := new(stable.Stable).Lines().
 		Aligns(0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1).
