@@ -7,13 +7,15 @@
 package tru
 
 import (
+	"bytes"
+	"crypto/rsa"
+	"encoding/binary"
 	"errors"
 	"net"
 	"sync"
 	"time"
 
-	// "github.com/google/uuid"
-	uuid "github.com/nu7hatch/gouuid"
+	"github.com/google/uuid"
 )
 
 type connect struct {
@@ -27,15 +29,70 @@ type connectData struct {
 	ch   *Channel
 }
 
+type connectPacketData struct {
+	uuid []byte // Connection UUID
+	data []byte // Packet data
+}
+
+// MarshalBinary marshal connection data
+func (c *connectPacketData) MarshalBinary() (out []byte, err error) {
+	buf := new(bytes.Buffer)
+	le := binary.LittleEndian
+
+	binary.Write(buf, le, uint8(len(c.uuid)))
+	binary.Write(buf, le, c.uuid)
+	binary.Write(buf, le, c.data)
+
+	out = buf.Bytes()
+	return
+}
+
+// UnmarshalBinary unmarshal connection data
+func (c *connectPacketData) UnmarshalBinary(data []byte) (err error) {
+
+	buf := bytes.NewReader(data)
+	le := binary.LittleEndian
+
+	var l uint8
+	err = binary.Read(buf, le, &l)
+	if err != nil {
+		return
+	}
+
+	uuid := make([]byte, l)
+	err = binary.Read(buf, le, &uuid)
+	if err != nil {
+		return
+	}
+	c.uuid = uuid
+
+	c.data = make([]byte, buf.Len())
+	err = binary.Read(buf, le, &c.data)
+
+	return
+}
+
 // Connect to new channel by address
 func (tru *Tru) Connect(addr string, reader ...ReaderFunc) (ch *Channel, err error) {
 
-	// Create uuid and connect packet
-	// uuid := uuid.New().String()
-	u, _ := uuid.NewV4()
-	uuid := u.String()
+	// Generate RSA key
+	c, err := tru.newCrypt()
+	if err != nil {
+		return
+	}
+	pub, err := c.publicKeyToBytes(&c.privateKey.PublicKey)
+	if err != nil {
+		return
+	}
 
-	pac, err := tru.newPacket().SetStatus(statusConnect).SetData([]byte(uuid)).MarshalBinary()
+	// Create uuid and connect packet
+	uuid := uuid.New().String()
+	cp := connectPacketData{[]byte(uuid), pub}
+	data, err := cp.MarshalBinary()
+	if err != nil {
+		return
+	}
+	pac, err := tru.newPacket().SetStatus(statusConnect).SetData(data).MarshalBinary()
 	if err != nil {
 		return
 	}
@@ -104,17 +161,61 @@ func (c *connect) get(uuid string) (cd *connectData, ok bool) {
 func (c *connect) serve(tru *Tru, addr net.Addr, pac *Packet) (err error) {
 	switch pac.Status() {
 
+	// Got by server. Client send to server statusConnect packet with client
+	// public key
 	case statusConnect:
+
+		// Unmarshal received data
+		cp := connectPacketData{}
+		err = cp.UnmarshalBinary(pac.Data())
+		if err != nil {
+			return
+		}
+
+		// Create new tru channel
 		var ch *Channel
 		ch, err = tru.newChannel(addr, true)
 		if err != nil {
 			return
 		}
-		pac = tru.newPacket().SetStatus(statusConnectAnswer).SetData(pac.Data())
+
+		// Get public key
+		var pub []byte
+		pub, err = ch.publicKeyToBytes(&ch.privateKey.PublicKey)
+		if err != nil {
+			return
+		}
+
+		// Encrypt public key with received clients public key
+		var pubcli *rsa.PublicKey
+		pubcli, err = ch.bytesToPublicKey(cp.data)
+		if err != nil {
+			return
+		}
+		cp.data, err = ch.encrypt(pubcli, pub)
+		if err != nil {
+			return
+		}
+		var data []byte
+		data, err = cp.MarshalBinary()
+
+		// Create packet and send it to tru channel
+		pac = tru.newPacket().SetStatus(statusConnectServerAnswer).SetData(data)
 		ch.writeToSender(pac)
 
-	case statusConnectAnswer:
-		cd, ok := c.get(string(pac.Data()))
+	// Got by client. Server answer to client with statusConnectServerAnswer
+	// packet with server public key
+	case statusConnectServerAnswer:
+
+		// Unmarshal received data
+		cp := connectPacketData{}
+		err = cp.UnmarshalBinary(pac.Data())
+		if err != nil {
+			return
+		}
+
+		// Get connection data from connection map and create new tru channel
+		cd, ok := c.get(string(cp.uuid))
 		if !ok {
 			err = errors.New("wrong connect answer packet")
 			return
@@ -123,10 +224,69 @@ func (c *connect) serve(tru *Tru, addr net.Addr, pac *Packet) (err error) {
 		if err != nil {
 			return
 		}
+
+		// Got servers public key from packet
+		var data []byte
+		data, err = cd.ch.decrypt(cp.data)
+		if err != nil {
+			return
+		}
+		var pub *rsa.PublicKey
+		pub, err = cd.ch.crypt.bytesToPublicKey(data)
+		if err != nil {
+			return
+		}
+
+		// Make session key
+		key := cd.ch.makeSesionKey()
+		cp.data, err = cd.ch.encrypt(pub, key)
+		if err != nil {
+			return
+		}
+
+		// Create output connect packet data
+		data, err = cp.MarshalBinary()
+		if err != nil {
+			return
+		}
+
+		// Create packet and send it to tru channel
+		pac = tru.newPacket().SetStatus(statusConnectClientAnswer).SetData(data)
+		cd.ch.writeToSender(pac)
+		cd.ch.setSesionKey(key)
+
+		// Send connectData to client connect wait channel
 		cd.wch <- cd
+
+	// Got by server. Client answer to server with statusConnectClientAnswer packet with
+	// current session key
+	case statusConnectClientAnswer:
+
+		// Unmarshal received data
+		cp := connectPacketData{}
+		err = cp.UnmarshalBinary(pac.Data())
+		if err != nil {
+			return
+		}
+
+		// Get channel
+		ch, ok := tru.getChannel(addr.String())
+		if !ok {
+			err = errors.New("channel does not exists")
+			return
+		}
+
+		// Decrypt and set session key
+		var key []byte
+		key, err = ch.decrypt(cp.data)
+		if err != nil {
+			return
+		}
+		ch.setSesionKey(key)
 
 	default:
 		err = errors.New("wrong packet status")
 	}
+
 	return
 }

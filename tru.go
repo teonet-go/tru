@@ -6,6 +6,7 @@
 package tru
 
 import (
+	"crypto/rsa"
 	"flag"
 	"fmt"
 	"log"
@@ -25,6 +26,7 @@ type Tru struct {
 	delay       int                 // Send delay
 	statLogMsgs []string            // Log messages
 	statTimer   *time.Timer         // Show statistic timer
+	privateKey  *rsa.PrivateKey     // Common private key
 	m           sync.RWMutex        // Channels map mutex
 }
 
@@ -40,6 +42,15 @@ func New(port int, reader ...ReaderFunc) (tru *Tru, err error) {
 	tru.cannels = make(map[string]*Channel)
 	tru.connect.connects = make(map[string]*connectData)
 	tru.conn, err = net.ListenPacket("udp", ":"+strconv.Itoa(port))
+	if err != nil {
+		return
+	}
+
+	// Generate privater key or use private key from attr parameters
+	// if param.privateKey == nil {
+	//	param.privateKey, _ = GeneratePrivateKey()
+	// }
+	tru.privateKey, err = tru.GeneratePrivateKey()
 	if err != nil {
 		return
 	}
@@ -138,13 +149,15 @@ func (tru *Tru) serve(n int, addr net.Addr, data []byte) {
 		return
 	}
 
-	// Get channel
+	// Get channel and process connection packets
 	ch, ok := tru.getChannel(addr.String())
-	if !ok || pac.Status() == statusConnect {
-		// Got packet from new channel
-		if ok {
+	if !ok || pac.Status() == statusConnect || pac.Status() == statusConnectClientAnswer {
+		// Got connect packet from existing channel, destroy this channel first
+		// becaus client reconnected
+		if ok && pac.Status() == statusConnect {
 			ch.destroy(fmt.Sprint("channel reconnect, destroy ", ch.addr.String()))
 		}
+		// Process connection packets
 		tru.connect.serve(tru, addr, pac)
 		return
 	}

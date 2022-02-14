@@ -27,6 +27,7 @@ type Channel struct {
 	recvQueue  receiveQueue  // Receive queue
 	tru        *Tru          // Pointer to tru
 	combine    combinePacket // Combine lage packet
+	*crypt                   // Crypt module
 }
 
 // const MaxUint16 = ^uint16(0)
@@ -43,6 +44,10 @@ func (tru *Tru) newChannel(addr net.Addr, serverMode ...bool) (ch *Channel, err 
 	ch = &Channel{addr: addr, tru: tru, delay: tru.delay}
 	if len(serverMode) > 0 {
 		ch.serverMode = serverMode[0]
+	}
+	ch.crypt, err = tru.newCrypt()
+	if err != nil {
+		return
 	}
 	ch.sendQueue.init(ch)
 	ch.recvQueue.init(ch)

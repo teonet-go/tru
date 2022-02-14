@@ -23,7 +23,8 @@ type Packet struct {
 
 const (
 	statusConnect = iota
-	statusConnectAnswer
+	statusConnectServerAnswer
+	statusConnectClientAnswer
 	statusData
 	statusAck
 	statusPing
@@ -81,7 +82,7 @@ func (p *Packet) HeaderLen() int {
 // Len get packet length
 func (p *Packet) MaxDataLen() int {
 	return maxUdpDataLength - p.HeaderLen()
-	// return 512 // look like optimal packet data length 
+	// return 512 // look like optimal packet data length
 }
 
 // Len get packet length
