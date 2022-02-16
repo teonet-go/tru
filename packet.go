@@ -13,13 +13,18 @@ import (
 )
 
 type Packet struct {
-	id                 uint16    // Packet ID
-	status             uint8     // Packet Type
-	data               []byte    // Packet Data
-	time               time.Time // Packet creating time
-	retransmitTime     time.Time // Packet retransmit time
-	retransmitAttempts int       // Packet retransmit attempts
+	id                 uint16             // Packet ID
+	status             uint8              // Packet Type
+	data               []byte             // Packet Data
+	time               time.Time          // Packet creating time
+	retransmitTime     time.Time          // Packet retransmit time
+	retransmitAttempts int                // Packet retransmit attempts
+	delivery           PacketDeliveryFunc // Packet delivery callback function
 }
+
+// PacketDeliveryFunc packet delivery callback function calls when packet
+// delivered to remote peer
+type PacketDeliveryFunc func(pac *Packet)
 
 const (
 	statusConnect = iota
@@ -97,10 +102,9 @@ func (p *Packet) Data() []byte {
 }
 
 // SetData set packet data
-func (p *Packet) SetData(data []byte) (out *Packet) {
-	out = p
-	out.data = data
-	return
+func (p *Packet) SetData(data []byte) *Packet {
+	p.data = data
+	return p
 }
 
 // ID get packet id
@@ -109,10 +113,9 @@ func (p *Packet) ID() int {
 }
 
 // SetID set packet id
-func (p *Packet) SetID(id int) (out *Packet) {
-	out = p
-	out.id = uint16(id)
-	return
+func (p *Packet) SetID(id int) *Packet {
+	p.id = uint16(id)
+	return p
 }
 
 // Status get packet status
@@ -121,10 +124,21 @@ func (p *Packet) Status() int {
 }
 
 // SetStatus set packet status
-func (p *Packet) SetStatus(status int) (out *Packet) {
-	out = p
-	out.status = uint8(status)
-	return
+func (p *Packet) SetStatus(status int) *Packet {
+	p.status = uint8(status)
+	return p
+}
+
+// Status get packet status
+func (p *Packet) Delivery() PacketDeliveryFunc {
+	return p.delivery
+}
+
+// SetDelivery set delivery function which calls when packet delivered to
+// remote peer
+func (p *Packet) SetDelivery(delivery PacketDeliveryFunc) *Packet {
+	p.delivery = delivery
+	return p
 }
 
 // distance check received packet distance and return integer value

@@ -187,7 +187,6 @@ func (ch *Channel) writeTo(data []byte, stat int, ids ...int) (id int, err error
 	}
 
 	// Set packet id and encript data
-	id = 0
 	if len(ids) > 0 {
 		id = ids[0]
 	}
@@ -195,7 +194,6 @@ func (ch *Channel) writeTo(data []byte, stat int, ids ...int) (id int, err error
 		id = ch.newID()
 		data, err = ch.encryptPacketData(id, data)
 		if err != nil {
-			// log.Println("encrypt error:", err)
 			return
 		}
 	}
