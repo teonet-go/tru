@@ -30,6 +30,7 @@ const (
 	statusConnect = iota
 	statusConnectServerAnswer
 	statusConnectClientAnswer
+	statusConnectDone
 	statusData
 	statusAck
 	statusPing

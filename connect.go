@@ -18,6 +18,8 @@ import (
 	"github.com/google/uuid"
 )
 
+const waitConnectionTimeout = 5 * time.Second
+
 type connect struct {
 	connects map[string]*connectData // Connections map
 	m        sync.RWMutex            // Connections maps mutex
@@ -127,7 +129,7 @@ func (c *connect) wait(wch chan *connectData) (ch *Channel, err error) {
 	case cd := <-wch:
 		ch = cd.ch
 		return
-	case <-time.After(5 * time.Second):
+	case <-time.After(waitConnectionTimeout):
 		err = errors.New("can't connect to peer during timeout")
 		return
 	}
@@ -255,9 +257,6 @@ func (c *connect) serve(tru *Tru, addr net.Addr, pac *Packet) (err error) {
 		cd.ch.writeToSender(pac)
 		cd.ch.setSesionKey(key)
 
-		// Send connectData to client connect wait channel
-		cd.wch <- cd
-
 	// Got by server. Client answer to server with statusConnectClientAnswer packet with
 	// current session key
 	case statusConnectClientAnswer:
@@ -283,6 +282,30 @@ func (c *connect) serve(tru *Tru, addr net.Addr, pac *Packet) (err error) {
 			return
 		}
 		ch.setSesionKey(key)
+
+		// Create packet and send it to tru channel
+		pac = tru.newPacket().SetStatus(statusConnectDone).SetData(nil)
+		ch.writeToSender(pac)
+
+	// Got by client. Server answer to client with statusConnectDone packet
+	case statusConnectDone:
+
+		// Unmarshal received data
+		cp := connectPacketData{}
+		err = cp.UnmarshalBinary(pac.Data())
+		if err != nil {
+			return
+		}
+
+		// Get connection data from connection map and get tru channel
+		cd, ok := c.get(string(cp.uuid))
+		if !ok {
+			err = errors.New("wrong connect answer packet")
+			return
+		}
+
+		// Send connectData to client connect wait channel
+		cd.wch <- cd
 
 	default:
 		err = errors.New("wrong packet status")
