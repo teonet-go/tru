@@ -144,6 +144,9 @@ func (p *Packet) Delivery() PacketDeliveryFunc {
 // SetDelivery set delivery function which calls when packet delivered to
 // remote peer
 func (p *Packet) SetDelivery(delivery PacketDeliveryFunc) *Packet {
+	if delivery == nil {
+		return p
+	}
 	log.Println("set delivery func")
 	p.delivery = delivery
 	p.deliveryTimer = *time.AfterFunc(p.deliveryTimeout, func() {
