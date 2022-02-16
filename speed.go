@@ -35,7 +35,7 @@ func (s *speed) get() int {
 	return s.speed
 }
 
-// add add packet to speed calculator
+// add packet to speed calculator
 func (s *speed) add(count ...bool) {
 	now := time.Now()
 	unixNano := now.UnixNano()
