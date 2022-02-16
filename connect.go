@@ -68,9 +68,12 @@ func (c *connectPacketData) UnmarshalBinary(data []byte) (err error) {
 	}
 	c.uuid = uuid
 
-	c.data = make([]byte, buf.Len())
-	err = binary.Read(buf, le, &c.data)
-
+	if buflen := buf.Len(); buflen > 0 {
+		c.data = make([]byte, buflen)
+		err = binary.Read(buf, le, &c.data)
+		return
+	}
+	c.data = nil
 	return
 }
 
@@ -219,7 +222,7 @@ func (c *connect) serve(tru *Tru, addr net.Addr, pac *Packet) (err error) {
 		// Get connection data from connection map and create new tru channel
 		cd, ok := c.get(string(cp.uuid))
 		if !ok {
-			err = errors.New("wrong connect answer packet")
+			err = errors.New("wrong connect server answer packet")
 			return
 		}
 		cd.ch, err = tru.newChannel(addr)
@@ -271,7 +274,7 @@ func (c *connect) serve(tru *Tru, addr net.Addr, pac *Packet) (err error) {
 		// Get channel
 		ch, ok := tru.getChannel(addr.String())
 		if !ok {
-			err = errors.New("channel does not exists")
+			err = errors.New("connected channel does not exists")
 			return
 		}
 
@@ -283,8 +286,16 @@ func (c *connect) serve(tru *Tru, addr net.Addr, pac *Packet) (err error) {
 		}
 		ch.setSesionKey(key)
 
+		// Create output connect packet data
+		var data []byte
+		cp.data = nil
+		data, err = cp.MarshalBinary()
+		if err != nil {
+			return
+		}
+
 		// Create packet and send it to tru channel
-		pac = tru.newPacket().SetStatus(statusConnectDone).SetData(nil)
+		pac = tru.newPacket().SetStatus(statusConnectDone).SetData(data)
 		ch.writeToSender(pac)
 
 	// Got by client. Server answer to client with statusConnectDone packet
@@ -300,7 +311,7 @@ func (c *connect) serve(tru *Tru, addr net.Addr, pac *Packet) (err error) {
 		// Get connection data from connection map and get tru channel
 		cd, ok := c.get(string(cp.uuid))
 		if !ok {
-			err = errors.New("wrong connect answer packet")
+			err = errors.New("wrong connect done packet")
 			return
 		}
 

@@ -161,15 +161,21 @@ func (tru *Tru) serve(n int, addr net.Addr, data []byte) {
 	}
 
 	// Get channel and process connection packets
-	ch, ok := tru.getChannel(addr.String())
-	if !ok || pac.Status() == statusConnect || pac.Status() == statusConnectClientAnswer {
+	ch, channelExists := tru.getChannel(addr.String())
+	if !channelExists ||
+		pac.Status() == statusConnect ||
+		pac.Status() == statusConnectClientAnswer ||
+		pac.Status() == statusConnectDone {
 		// Got connect packet from existing channel, destroy this channel first
 		// becaus client reconnected
-		if ok && pac.Status() == statusConnect {
+		if channelExists && pac.Status() == statusConnect {
 			ch.destroy(fmt.Sprint("channel reconnect, destroy ", ch.addr.String()))
 		}
 		// Process connection packets
-		tru.connect.serve(tru, addr, pac)
+		err := tru.connect.serve(tru, addr, pac)
+		if channelExists && err != nil {
+			ch.destroy(fmt.Sprint("channel connection error, destroy ", ch.addr.String()))
+		}
 		return
 	}
 
