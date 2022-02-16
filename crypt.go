@@ -293,18 +293,18 @@ func (k sessionKey) newSHA256Hash(n ...int) []byte {
 	return hash.Sum(nil)
 }
 
-func (k sessionKey) String() string {
-	return fmt.Sprintf("%x", k.bytes)
-}
+// func (k sessionKey) String() string {
+// 	return fmt.Sprintf("%x", k.bytes)
+// }
 
-// randomString generates a random string of n length
+// randomString generates n length random string of printable characters
 func (k sessionKey) randomString(n int) string {
 	return RandomString(n)
 }
 
 var characterRunes = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
 
-// randomString generates a random string of n length
+// randomString generates n length random string of printable characters
 func RandomString(n int) string {
 	b := make([]rune, n)
 	for i := range b {

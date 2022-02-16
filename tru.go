@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// TRU is new teonet releible udp packge
+// TRU is new teonet releible udp go packge
 package tru
 
 import (
@@ -16,6 +16,7 @@ import (
 	"time"
 )
 
+// Tru connector
 type Tru struct {
 	conn        net.PacketConn      // Local connection
 	cannels     map[string]*Channel // Channels map
@@ -75,7 +76,7 @@ func New(port int, reader ...ReaderFunc) (tru *Tru, err error) {
 	return
 }
 
-// Close write close to all connected channels
+// Close close tru listner and all connected channels
 func (tru *Tru) Close() {
 	tru.m.RLock()
 	for _, ch := range tru.cannels {
@@ -243,6 +244,7 @@ func (tru *Tru) serve(n int, addr net.Addr, data []byte) {
 	ch.stat.setLastActivity()
 }
 
+// ReaderFunc tru reder function type
 type ReaderFunc func(ch *Channel, pac *Packet, err error) (processed bool)
 
 type readerChData struct {

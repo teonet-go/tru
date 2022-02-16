@@ -77,7 +77,7 @@ func (c *connectPacketData) UnmarshalBinary(data []byte) (err error) {
 	return
 }
 
-// Connect to new channel by address
+// Connect to tru channel (remote peer) by address
 func (tru *Tru) Connect(addr string, reader ...ReaderFunc) (ch *Channel, err error) {
 
 	// Generate RSA key

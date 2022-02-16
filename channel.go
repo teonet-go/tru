@@ -119,12 +119,12 @@ func (ch *Channel) Close() {
 	ch.destroy(fmt.Sprint("channel close, destroy ", ch.addr.String()))
 }
 
-// Addr return channel address
+// Addr return tru channels address
 func (ch *Channel) Addr() net.Addr {
 	return ch.addr
 }
 
-// WriteTo writes packet with data to channel. Second parameter delivery is
+// WriteTo writes packet with data to tru channel. Second parameter delivery is
 // callback function of PacketDeliveryFunc func, it calls when packet deliverid
 // to remout peer. The third parameter is the delivery callback timeout. The
 // PacketDeliveryFunc callback parameter is pac - pointer to send packet, and

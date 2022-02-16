@@ -49,14 +49,14 @@ const (
 	cryptAesLength   = 28    // Ees crypt add to max len packet
 )
 
-const DeliveryTimeout = 5 * time.Second // Delivery function timeout
+const DeliveryTimeout = 5 * time.Second // Default delivery function timeout
 
 // newPacket create new empty packet
 func (tru *Tru) newPacket() *Packet {
 	return &Packet{time: time.Now()}
 }
 
-// MarshalBinary
+// MarshalBinary marshal packet
 func (p *Packet) MarshalBinary() (out []byte, err error) {
 	buf := new(bytes.Buffer)
 	le := binary.LittleEndian
@@ -69,7 +69,7 @@ func (p *Packet) MarshalBinary() (out []byte, err error) {
 	return
 }
 
-// UnmarshalBinary
+// UnmarshalBinary unmarshal packet
 func (p *Packet) UnmarshalBinary(data []byte) (err error) {
 
 	buf := bytes.NewReader(data)
