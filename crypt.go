@@ -61,25 +61,26 @@ func (c crypt) xorEncryptDecrypt(input, key []byte) {
 	}
 }
 
+// encryptAES encrypt data using AES
 func (c crypt) encryptAES(key []byte, data []byte) (out []byte, err error) {
 
 	//Create a new Cipher Block from the key
 	block, err := aes.NewCipher(key)
 	if err != nil {
-		panic(err.Error())
+		return
 	}
 
 	// Create a new GCM - https://en.wikipedia.org/wiki/Galois/Counter_Mode
 	// https://golang.org/pkg/crypto/cipher/#NewGCM
 	aesGCM, err := cipher.NewGCM(block)
 	if err != nil {
-		panic(err.Error())
+		return
 	}
 
 	// Create a nonce. Nonce should be from GCM
 	nonce := make([]byte, aesGCM.NonceSize())
 	if _, err = io.ReadFull(rand.Reader, nonce); err != nil {
-		panic(err.Error())
+		return
 	}
 
 	// Encrypt the data using aesGCM.Seal
@@ -91,18 +92,19 @@ func (c crypt) encryptAES(key []byte, data []byte) (out []byte, err error) {
 	return
 }
 
+// decryptAES decrypt data using AES
 func (c crypt) decryptAES(key []byte, data []byte) (out []byte, err error) {
 
 	//Create a new Cipher Block from the key
 	block, err := aes.NewCipher(key)
 	if err != nil {
-		panic(err.Error())
+		return
 	}
 
 	//Create a new GCM
 	aesGCM, err := cipher.NewGCM(block)
 	if err != nil {
-		panic(err.Error())
+		return
 	}
 
 	//Get the nonce size
@@ -117,6 +119,7 @@ func (c crypt) decryptAES(key []byte, data []byte) (out []byte, err error) {
 	return
 }
 
+// encryptPacketData encryp packet data with packet key
 func (c crypt) encryptPacketData(id int, data []byte) (out []byte, err error) {
 	if !c.ison() {
 		return data, nil
@@ -134,6 +137,7 @@ func (c crypt) encryptPacketData(id int, data []byte) (out []byte, err error) {
 	return
 }
 
+// decryptPacketData decrypt packet data with packet key
 func (c crypt) decryptPacketData(id int, data []byte) (out []byte, err error) {
 	if !c.ison() {
 		return data, nil
