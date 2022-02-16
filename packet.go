@@ -9,6 +9,7 @@ package tru
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"time"
 )
 
@@ -20,11 +21,12 @@ type Packet struct {
 	retransmitTime     time.Time          // Packet retransmit time
 	retransmitAttempts int                // Packet retransmit attempts
 	delivery           PacketDeliveryFunc // Packet delivery callback function
+	deliveryTimer      time.Timer         // Packet delivery timeout timer
 }
 
 // PacketDeliveryFunc packet delivery callback function calls when packet
 // delivered to remote peer
-type PacketDeliveryFunc func(pac *Packet)
+type PacketDeliveryFunc func(pac *Packet, err error)
 
 const (
 	statusConnect = iota
@@ -42,8 +44,10 @@ const (
 
 const (
 	maxUdpDataLength = 65527 // Max packet 65535 - 8 byte header
-	cryptAESadd      = 28
+	cryptAesLength   = 28    // Ees crypt add to max len packet
 )
+
+const DeliveryTimeout = 5 * time.Second // Delivery function timeout
 
 // newPacket create new empty packet
 func (tru *Tru) newPacket() *Packet {
@@ -88,7 +92,7 @@ func (p *Packet) HeaderLen() int {
 
 // Len get packet length
 func (p *Packet) MaxDataLen() int {
-	return maxUdpDataLength - p.HeaderLen() - cryptAESadd
+	return maxUdpDataLength - p.HeaderLen() - cryptAesLength
 	// return 1024 // look like optimal packet data length
 }
 
@@ -139,6 +143,10 @@ func (p *Packet) Delivery() PacketDeliveryFunc {
 // remote peer
 func (p *Packet) SetDelivery(delivery PacketDeliveryFunc) *Packet {
 	p.delivery = delivery
+	p.deliveryTimer = *time.AfterFunc(DeliveryTimeout, func() {
+		err := errors.New("delivery timeout")
+		p.delivery(p, err)
+	})
 	return p
 }
 
