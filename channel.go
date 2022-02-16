@@ -162,50 +162,7 @@ func (ch *Channel) writeTo(data []byte, stat int, delivery []interface{}, ids ..
 	status := stat &^ statusSplit
 
 	// Calculate and execute delay for client mode data packets
-	if !ch.serverMode && status == statusData {
-
-		// Get current delay
-		delay := time.Duration(ch.delay) * time.Microsecond
-
-		// Claculate delay
-		var i = 0
-		var chDelay = ch.delay
-		if pac := ch.sendQueue.getFirst(); pac != nil {
-
-			// Wait up to 100 ms if fist packet has retransmit attempt
-			for rta := pac.retransmitAttempts; rta > 0; i++ {
-				if i >= 10 {
-					break
-				}
-
-				// 10 ms delay if retransmit attempt
-				time.Sleep(10000 * time.Microsecond)
-			}
-		}
-		if i == 0 {
-			switch {
-			case ch.delay > 100:
-				chDelay = ch.delay - 10
-			case ch.delay > 30:
-				chDelay = ch.delay - 1
-			}
-		} else {
-			chDelay = ch.delay + 10
-		}
-
-		// Change delay
-		if time.Since(ch.stat.lastDelayCheck) > 50*time.Millisecond {
-			ch.stat.lastDelayCheck = time.Now()
-			ch.delay = chDelay
-		}
-
-		// Execute delay
-		if since := time.Since(ch.stat.lastSend); since < delay {
-			time.Sleep(delay - since)
-		}
-
-		ch.stat.lastSend = time.Now()
-	}
+	ch.writeToDelay(status)
 
 	// Set packet id and encript data
 	if len(ids) > 0 {
@@ -231,6 +188,7 @@ func (ch *Channel) writeTo(data []byte, stat int, delivery []interface{}, ids ..
 			pac.SetDelivery(deliveryFunc)
 			ch.stat.setSend()
 		}
+		ch.stat.lastSend = time.Now()
 	}
 
 	// Send disconnect immediately
@@ -250,6 +208,52 @@ func (ch *Channel) writeTo(data []byte, stat int, delivery []interface{}, ids ..
 	ch.writeToSender(pac)
 
 	return
+}
+
+// writeToDelay calculate and execute delay for client mode data packets
+func (ch *Channel) writeToDelay(status int) {
+	if !(!ch.serverMode && status == statusData) {
+		return
+	}
+
+	// Wait up to 100 ms if fist packet has retransmit attempt
+	var retransmitDelayCount = 0
+	if pac := ch.sendQueue.getFirst(); pac != nil {
+		for rta := pac.retransmitAttempts; rta > 0; retransmitDelayCount++ {
+			if retransmitDelayCount >= 10 {
+				break
+			}
+			// 10 ms sleet if retransmit attempt now
+			time.Sleep(10000 * time.Microsecond)
+		}
+	}
+
+	// Get current delay
+	delay := time.Duration(ch.delay) * time.Microsecond
+
+	// Claculate new delay
+	var chDelay = ch.delay
+	if retransmitDelayCount == 0 {
+		switch {
+		case ch.delay > 100:
+			chDelay = ch.delay - 10
+		case ch.delay > 30:
+			chDelay = ch.delay - 1
+		}
+	} else {
+		chDelay = ch.delay + 10
+	}
+
+	// Set new delay
+	if time.Since(ch.stat.lastDelayCheck) > 50*time.Millisecond {
+		ch.stat.lastDelayCheck = time.Now()
+		ch.delay = chDelay
+	}
+
+	// Execute current delay
+	if since := time.Since(ch.stat.lastSend); since < delay {
+		time.Sleep(delay - since)
+	}
 }
 
 // writeToPing writes ping packet to channel
