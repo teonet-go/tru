@@ -124,22 +124,39 @@ func (ch *Channel) Addr() net.Addr {
 	return ch.addr
 }
 
-// WriteTo writes a packet with data to channel
-func (ch *Channel) WriteTo(data []byte, delivery ...PacketDeliveryFunc) (id int, err error) {
+// WriteTo writes packet with data to channel. Second parameter delivery is
+// callback function of PacketDeliveryFunc func, it calls when packet deliverid
+// to remout peer. The third parameter is the delivery callback timeout. The
+// PacketDeliveryFunc callback parameter is pac - pointer to send packet, and
+// err - timeout error or success if nil.
+func (ch *Channel) WriteTo(data []byte, delivery ...interface{}) (id int, err error) {
 	return ch.splitPacket(data, func(data []byte, split int) (int, error) {
-		var df PacketDeliveryFunc = nil
-		if len(delivery) > 0 && split == 0 {
-			df = delivery[0]
-		}
-		return ch.writeTo(data, statusData|split, df)
+		return ch.writeTo(data, statusData|split, delivery)
 	})
 }
 
 // writeTo writes a packet with status and data to channel
-func (ch *Channel) writeTo(data []byte, stat int, delivery PacketDeliveryFunc, ids ...int) (id int, err error) {
+func (ch *Channel) writeTo(data []byte, stat int, delivery []interface{}, ids ...int) (id int, err error) {
 	if ch.stat.destroyed {
 		err = errors.New("channel destroyed")
 		return
+	}
+
+	// Parse delivery parameter
+	var deliveryFunc PacketDeliveryFunc
+	var deliveryTimeout time.Duration = DeliveryTimeout
+	for _, i := range delivery {
+		switch v := i.(type) {
+		case PacketDeliveryFunc:
+			deliveryFunc = v
+		case func(*Packet, error):
+			deliveryFunc = v
+		case time.Duration:
+			deliveryTimeout = v
+		default:
+			err = errors.New("got wrong type delivery parameter")
+			return
+		}
 	}
 
 	status := stat &^ statusSplit
@@ -210,7 +227,8 @@ func (ch *Channel) writeTo(data []byte, stat int, delivery PacketDeliveryFunc, i
 		ch.setRetransmitTime(pac)
 		ch.sendQueue.add(pac)
 		if stat == statusData {
-			pac.SetDelivery(delivery)
+			pac.SetDeliveryTimeout(deliveryTimeout)
+			pac.SetDelivery(deliveryFunc)
 			ch.stat.setSend()
 		}
 	}
@@ -229,7 +247,6 @@ func (ch *Channel) writeTo(data []byte, stat int, delivery PacketDeliveryFunc, i
 	}
 
 	// Send to write channel
-	// ch.tru.senderCh <- senderChData{ch, pac}
 	ch.writeToSender(pac)
 
 	return

@@ -10,6 +10,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
+	"log"
 	"time"
 )
 
@@ -21,6 +22,7 @@ type Packet struct {
 	retransmitTime     time.Time          // Packet retransmit time
 	retransmitAttempts int                // Packet retransmit attempts
 	delivery           PacketDeliveryFunc // Packet delivery callback function
+	deliveryTimeout    time.Duration      // Packet delivery callback timeout
 	deliveryTimer      time.Timer         // Packet delivery timeout timer
 }
 
@@ -142,11 +144,19 @@ func (p *Packet) Delivery() PacketDeliveryFunc {
 // SetDelivery set delivery function which calls when packet delivered to
 // remote peer
 func (p *Packet) SetDelivery(delivery PacketDeliveryFunc) *Packet {
+	log.Println("set delivery func")
 	p.delivery = delivery
-	p.deliveryTimer = *time.AfterFunc(DeliveryTimeout, func() {
+	p.deliveryTimer = *time.AfterFunc(p.deliveryTimeout, func() {
 		err := errors.New("delivery timeout")
 		p.delivery(p, err)
 	})
+	return p
+}
+
+// SetDeliveryTimeout set delivery function timeout
+func (p *Packet) SetDeliveryTimeout(timeout time.Duration) *Packet {
+	log.Println("set delivery timeout")
+	p.deliveryTimeout = timeout
 	return p
 }
 
