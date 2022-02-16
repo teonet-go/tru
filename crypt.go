@@ -241,9 +241,9 @@ func (k *sessionKey) setSesionKey(key []byte) {
 }
 
 // ison return true if connection established (and crypt enabled)
-func (c *Channel) ison() bool {
-	return c.crypt != nil && c.crypt.ison()
-}
+// func (c *Channel) ison() bool {
+// 	return c.crypt != nil && c.crypt.ison()
+// }
 
 // ison return true if crypt enable
 func (c crypt) ison() bool {
