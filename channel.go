@@ -125,14 +125,18 @@ func (ch *Channel) Addr() net.Addr {
 }
 
 // WriteTo writes a packet with data to channel
-func (ch *Channel) WriteTo(data []byte) (id int, err error) {
+func (ch *Channel) WriteTo(data []byte, delivery ...PacketDeliveryFunc) (id int, err error) {
 	return ch.splitPacket(data, func(data []byte, split int) (int, error) {
-		return ch.writeTo(data, statusData|split)
+		var df PacketDeliveryFunc = nil
+		if len(delivery) > 0 && split == 0 {
+			df = delivery[0]
+		}
+		return ch.writeTo(data, statusData|split, df)
 	})
 }
 
 // writeTo writes a packet with status and data to channel
-func (ch *Channel) writeTo(data []byte, stat int, ids ...int) (id int, err error) {
+func (ch *Channel) writeTo(data []byte, stat int, delivery PacketDeliveryFunc, ids ...int) (id int, err error) {
 	if ch.stat.destroyed {
 		err = errors.New("channel destroyed")
 		return
@@ -206,6 +210,7 @@ func (ch *Channel) writeTo(data []byte, stat int, ids ...int) (id int, err error
 		ch.setRetransmitTime(pac)
 		ch.sendQueue.add(pac)
 		if stat == statusData {
+			pac.SetDelivery(delivery)
 			ch.stat.setSend()
 		}
 	}
@@ -232,25 +237,25 @@ func (ch *Channel) writeTo(data []byte, stat int, ids ...int) (id int, err error
 
 // writeToPing writes ping packet to channel
 func (ch *Channel) writeToPing() (err error) {
-	_, err = ch.writeTo(nil, statusPing)
+	_, err = ch.writeTo(nil, statusPing, nil)
 	return
 }
 
 // writeToPong writes pong packet to channel
 func (ch *Channel) writeToPong() (err error) {
-	_, err = ch.writeTo(nil, statusPong)
+	_, err = ch.writeTo(nil, statusPong, nil)
 	return
 }
 
 // writeToAck writes ack packet to channel
 func (ch *Channel) writeToAck(pac *Packet) (err error) {
-	_, err = ch.writeTo(nil, statusAck, pac.ID())
+	_, err = ch.writeTo(nil, statusAck, nil, pac.ID())
 	return
 }
 
 // writeToDisconnect write disconnect packet
 func (ch *Channel) writeToDisconnect() (err error) {
-	_, err = ch.writeTo(nil, statusDisconnect)
+	_, err = ch.writeTo(nil, statusDisconnect, nil)
 	return
 }
 
