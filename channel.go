@@ -81,11 +81,11 @@ func (tru *Tru) getChannel(addr string) (ch *Channel, ok bool) {
 }
 
 // numChannels return number of channels
-func (tru *Tru) numChannels() int {
-	tru.m.RLock()
-	defer tru.m.RUnlock()
-	return len(tru.cannels)
-}
+// func (tru *Tru) numChannels() int {
+// 	tru.m.RLock()
+// 	defer tru.m.RUnlock()
+// 	return len(tru.cannels)
+// }
 
 // addToMsgsLog add message to log
 func (tru *Tru) addToMsgsLog(msg string) {

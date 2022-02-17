@@ -6,7 +6,7 @@
 
 package tru
 
-// splitPacket lage packet
+// splitPacket split lage packet
 func (ch *Channel) splitPacket(data []byte, writeTo func(data []byte, split int) (int, error)) (rid int, err error) {
 	var id int
 	var pac Packet
@@ -33,6 +33,7 @@ func (ch *Channel) splitPacket(data []byte, writeTo func(data []byte, split int)
 	return
 }
 
+// combinePacket combine packet receiver and data structure
 type combinePacket struct {
 	combine bool
 	data    []byte

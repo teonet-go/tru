@@ -92,7 +92,104 @@ func (s *statistic) checkActivity(inactive, keepalive func()) {
 	})
 }
 
-// PrintStatistic print tru statistics
+// ChannelStatistic tru channel statistic data structure
+type ChannelStatistic struct {
+	Addr  string  // peer address
+	Send  int64   // send packets
+	Ssec  int64   // send per second
+	Rsnd  int64   // resend packets
+	Recv  int64   // receive packets
+	Rsec  int64   // receive per second
+	Drop  int64   // drop received packets
+	SQ    uint    // send queue length
+	RQ    uint    // receive queue length
+	RTA   int     // first packet retransmit attempt
+	Delay int     // client send delay
+	TT    float64 // trip time
+}
+
+type ChannelsStatistic []ChannelStatistic
+
+// Statistic get statistic
+func (tru *Tru) Statistic() (stat ChannelsStatistic) {
+	tru.m.RLock()
+	defer tru.m.RUnlock()
+
+	// Get rta function
+	rta := func(ch *Channel) (rta int) {
+		if pac := ch.sendQueue.getFirst(); pac != nil {
+			rta = pac.retransmitAttempts
+		}
+		return
+	}
+
+	// Append channels statistic to slice
+	for _, ch := range tru.cannels {
+		stat = append(stat, ChannelStatistic{
+			Addr:  ch.addr.String(),
+			Send:  ch.stat.send,
+			Ssec:  int64(ch.stat.sendSpeed.get()),
+			Rsnd:  ch.stat.retransmit,
+			Recv:  ch.stat.recv,
+			Rsec:  int64(ch.stat.recvSpeed.get()),
+			Drop:  ch.stat.drop,
+			SQ:    uint(ch.sendQueue.len()),
+			RQ:    uint(ch.recvQueue.len()),
+			RTA:   rta(ch),
+			Delay: ch.delay,
+			TT:    float64(ch.getTripTime().Microseconds()) / 1000.0,
+		})
+	}
+
+	// Sort slice with channels statistic by address
+	sort.Slice(stat, func(i, j int) bool {
+		return stat[i].Addr < stat[j].Addr
+	})
+
+	return
+}
+
+// String stringlify channels statistic
+func (cs *ChannelsStatistic) String(cleanLine ...bool) string {
+
+	numRows := len(*cs)
+
+	// Create new simple table
+	formats := make([]string, 12)
+	formats[2] = "%5d"
+	formats[5] = "%5d"
+	formats[7] = "%3d"
+	formats[8] = "%3d"
+	formats[11] = "%.3f"
+	st := new(stable.Stable).Lines().
+		Aligns(0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1).
+		Formats(formats...)
+	if numRows > 1 {
+		st.Totals(&ChannelStatistic{}, 0, 1, 1, 1, 1, 1, 1)
+		numRows = 1
+	}
+	if len(cleanLine) > 0 && cleanLine[0] {
+		st.CleanLine()
+	}
+
+	// Create and return channel statistic table in string
+	return st.StructToTable(*cs)
+}
+
+// NumRows return number of rows in stringlifyed statistic
+func (cs *ChannelsStatistic) NumRows() (numRows int) {
+	numRows = len(*cs)
+	if numRows > 1 {
+		numRows++ // totals
+	}
+	if numRows > 0 {
+		numRows += 3 // lines
+		numRows += 1 // title
+	}
+	return
+}
+
+// PrintStatistic print tru statistics continously
 func (tru *Tru) PrintStatistic() {
 
 	var printStat func()
@@ -147,84 +244,7 @@ func (tru *Tru) PrintStatistic() {
 	printStat()
 }
 
-// statToString create and return channel statistic table in string
-func (tru *Tru) statToString(cleanLine bool) (table string, numRows int) {
-
-	// Simple table data structure
-	type statData struct {
-		Addr  string  // peer address
-		Send  int64   // send packets
-		Ssec  int64   // send per second
-		Rsnd  int64   // resend packets
-		Recv  int64   // receive packets
-		Rsec  int64   // receive per second
-		Drop  int64   // drop received packets
-		SQ    uint    // send queue length
-		RQ    uint    // receive queue length
-		RTA   int     // first packet retransmit attempt
-		Delay int     // client send delay
-		TT    float64 // trip time
-	}
-
-	// Create new simple table
-	formats := make([]string, 12)
-	formats[2] = "%5d"
-	formats[5] = "%5d"
-	formats[7] = "%3d"
-	formats[8] = "%3d"
-	formats[11] = "%.3f"
-	st := new(stable.Stable).Lines().
-		Aligns(0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1).
-		Formats(formats...)
-	if tru.numChannels() > 1 {
-		st.Totals(&statData{}, 0, 1, 1, 1, 1, 1, 1)
-		numRows = 1
-	}
-	if cleanLine {
-		st.CleanLine()
-	}
-
-	// Add channels statistic stat slice
-	tru.m.RLock()
-	var stat []statData
-	for _, ch := range tru.cannels {
-		numRows++
-		var rta int
-		pac := ch.sendQueue.getFirst()
-		if pac != nil {
-			rta = pac.retransmitAttempts
-		}
-		stat = append(stat, statData{
-			Addr:  ch.addr.String(),
-			Send:  ch.stat.send,
-			Ssec:  int64(ch.stat.sendSpeed.get()),
-			Rsnd:  ch.stat.retransmit,
-			Recv:  ch.stat.recv,
-			Rsec:  int64(ch.stat.recvSpeed.get()),
-			Drop:  ch.stat.drop,
-			SQ:    uint(ch.sendQueue.len()),
-			RQ:    uint(ch.recvQueue.len()),
-			RTA:   rta,
-			Delay: ch.delay,
-			TT:    float64(ch.getTripTime().Microseconds()) / 1000.0,
-		})
-	}
-	tru.m.RUnlock()
-
-	// Sort slice with channels statistic by address
-	sort.Slice(stat, func(i, j int) bool {
-		return stat[i].Addr < stat[j].Addr
-	})
-
-	// Create and return channel statistic table in string
-	table = st.StructToTable(stat)
-	if numRows > 0 {
-		numRows += 3 // lines
-		numRows += 1 // title
-	}
-	return
-}
-
+// StopPrintStatistic stop print statistic
 func (tru *Tru) StopPrintStatistic() {
 	if tru.statTimer != nil {
 		tru.statTimer.Stop()
@@ -233,6 +253,18 @@ func (tru *Tru) StopPrintStatistic() {
 	}
 }
 
+// statToString get and return channels statistic table in string
+func (tru *Tru) statToString(cleanLine bool) (table string, numRows int) {
+
+	// Get statistic
+	stat := tru.Statistic()
+	table = stat.String(true)
+	numRows = stat.NumRows()
+
+	return
+}
+
+// getTermSize get terminal size
 func (tru *Tru) getTermSize() (width, height int, err error) {
 	width, height, err = term.GetSize(0)
 	return
