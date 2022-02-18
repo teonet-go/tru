@@ -193,6 +193,7 @@ func (p *Packet) distance(expectedID uint16, id uint16) int {
 func (p *Packet) getRetransmitAttempts() (rta int) {
 	p.RLock()
 	defer p.RUnlock()
+
 	return p.retransmitAttempts
 }
 
@@ -201,5 +202,23 @@ func (p *Packet) getRetransmitAttempts() (rta int) {
 func (p *Packet) setRetransmitAttempts(rta int) {
 	p.Lock()
 	defer p.Unlock()
+
 	p.retransmitAttempts = rta
+}
+
+// getRetransmitTime get retransmit time to packet
+func (p *Packet) getRetransmitTime() (rtt time.Time) {
+	p.RLock()
+	defer p.RUnlock()
+
+	return p.retransmitTime
+}
+
+// setRetransmitTime set retransmit time to packet
+func (p *Packet) setRetransmitTime(rtt time.Duration) {
+	p.Lock()
+	defer p.Unlock()
+
+	p.retransmitTime = time.Now().Add(rtt)
+	p.time = time.Now()
 }

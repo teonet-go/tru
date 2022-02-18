@@ -127,7 +127,7 @@ func (s *sendQueue) retransmit(ch *Channel) {
 
 			// Check retransmit time
 			pac := e.Value.(*Packet)
-			if !pac.retransmitTime.Before(time.Now()) {
+			if !pac.getRetransmitTime().Before(time.Now()) {
 				break
 			}
 

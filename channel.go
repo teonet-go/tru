@@ -328,16 +328,15 @@ func (ch *Channel) setRetransmitTime(pac *Packet) (rt time.Time, err error) {
 		rtt += tt
 	}
 
-	if pac.retransmitAttempts > 0 {
-		rtt *= time.Duration(pac.retransmitAttempts + 1)
+	if ra := pac.getRetransmitAttempts(); ra > 0 {
+		rtt *= time.Duration(ra + 1)
 	}
 
 	if rtt > maxRTT {
 		rtt = maxRTT
 	}
 
-	pac.retransmitTime = time.Now().Add(rtt)
-	pac.time = time.Now()
+	pac.setRetransmitTime(rtt)
 
 	return
 }
