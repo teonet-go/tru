@@ -272,10 +272,10 @@ func (cs *ChannelsStatistic) String(cleanLine ...bool) string {
 	formats[10] = "%3d"
 	formats[13] = "%.3f"
 	st := new(stable.Stable).Lines().
-		Aligns(0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1).
+		Aligns(0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1).
 		Formats(formats...)
 	if numRows > 1 {
-		st.Totals(&ChannelStatistic{}, 0, 1, 1, 1, 1, 1, 1)
+		st.Totals(&ChannelStatistic{}, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1)
 		numRows = 1
 	}
 	if len(cleanLine) > 0 && cleanLine[0] {
