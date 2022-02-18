@@ -24,12 +24,12 @@ type Tru struct {
 	readerCh    chan readerChData   // Reader channel
 	senderCh    chan senderChData   // Sender channel
 	connect     connect             // Connect methods receiver
-	delay       int                 // Send delay
+	sendDelay   int                 // Common send delay
 	statLogMsgs []string            // Log messages
 	statTimer   *time.Timer         // Show statistic timer
 	privateKey  *rsa.PrivateKey     // Common private key
 	maxDataLen  int                 // Max data len in created packets, 0 - maximum UDP len
-	m           sync.RWMutex        // Channels map mutex
+	mu          sync.RWMutex        // Channels map mutex
 }
 
 const chanLen = 10
@@ -78,21 +78,21 @@ func New(port int, reader ...ReaderFunc) (tru *Tru, err error) {
 
 // Close close tru listner and all connected channels
 func (tru *Tru) Close() {
-	tru.m.RLock()
+	tru.mu.RLock()
 	for _, ch := range tru.cannels {
-		tru.m.RUnlock()
+		tru.mu.RUnlock()
 		ch.Close()
 		tru.Close()
 		return
 	}
-	tru.m.RUnlock()
+	tru.mu.RUnlock()
 	tru.conn.Close()
 	tru.StopPrintStatistic()
 }
 
 // SetSendDelay set default (start) clients send delay
 func (tru *Tru) SetSendDelay(delay int) {
-	tru.delay = delay
+	tru.sendDelay = delay
 }
 
 // SetMaxDataLen set max data len in created packets, 0 - maximum UDP len
@@ -214,7 +214,7 @@ func (tru *Tru) serve(n int, addr net.Addr, data []byte) {
 		switch {
 		// Already processed packet (id < expectedID)
 		case dist < 0:
-			ch.stat.drop++
+			ch.stat.setDrop()
 		// Packet with id more than expectedID placed to receive queue and wait
 		// previouse packets
 		case dist > 0:
@@ -222,7 +222,7 @@ func (tru *Tru) serve(n int, addr net.Addr, data []byte) {
 			if !ok {
 				ch.recvQueue.add(pac)
 			} else {
-				ch.stat.drop++
+				ch.stat.setDrop()
 			}
 		// Valid data packet received (id == expectedID)
 		case dist == 0:
@@ -258,7 +258,7 @@ func (tru *Tru) readerProccess() {
 	for r := range tru.readerCh {
 
 		// Check channel destroyed
-		if r.ch.stat.destroyed {
+		if r.ch.stat.isDestroyed() {
 			continue
 		}
 
@@ -286,7 +286,7 @@ func (tru *Tru) senderProccess() {
 	for r := range tru.senderCh {
 
 		// Check channel destroyed
-		if r.ch.stat.destroyed {
+		if r.ch.stat.isDestroyed() {
 			continue
 		}
 

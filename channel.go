@@ -21,7 +21,6 @@ type Channel struct {
 	id         uint16        // Next send ID
 	expectedID uint16        // Next expected ID
 	reader     ReaderFunc    // Channels reader
-	delay      int           // Client send delay
 	stat       statistic     // Statictic struct and receiver
 	sendQueue  sendQueue     // Send queue
 	recvQueue  receiveQueue  // Receive queue
@@ -35,14 +34,14 @@ type Channel struct {
 
 // NewChannel create new tru channel by address
 func (tru *Tru) newChannel(addr net.Addr, serverMode ...bool) (ch *Channel, err error) {
-	tru.m.Lock()
-	defer tru.m.Unlock()
+	tru.mu.Lock()
+	defer tru.mu.Unlock()
 
 	msg := fmt.Sprint("new channel ", addr.String())
 	log.Println(msg)
 	tru.addToMsgsLog(msg)
 
-	ch = &Channel{addr: addr, tru: tru, delay: tru.delay, maxDataLen: tru.maxDataLen}
+	ch = &Channel{addr: addr, tru: tru, maxDataLen: tru.maxDataLen}
 	if len(serverMode) > 0 {
 		ch.serverMode = serverMode[0]
 	}
@@ -66,30 +65,23 @@ func (tru *Tru) newChannel(addr net.Addr, serverMode ...bool) (ch *Channel, err 
 			ch.writeToPing()
 		},
 	)
-
+	ch.stat.sendDelay = tru.sendDelay
 	tru.cannels[addr.String()] = ch
 	return
 }
 
 // getChannel get tru channel by address
 func (tru *Tru) getChannel(addr string) (ch *Channel, ok bool) {
-	tru.m.RLock()
-	defer tru.m.RUnlock()
+	tru.mu.RLock()
+	defer tru.mu.RUnlock()
 
 	ch, ok = tru.cannels[addr]
 	return
 }
 
-// numChannels return number of channels
-// func (tru *Tru) numChannels() int {
-// 	tru.m.RLock()
-// 	defer tru.m.RUnlock()
-// 	return len(tru.cannels)
-// }
-
 // addToMsgsLog add message to log
 func (tru *Tru) addToMsgsLog(msg string) {
-	const layout = "2006-01-02 15:04:05"
+	const layout = "2006-01-02 15:04:05.000000"
 	msg = fmt.Sprintf("%v %s", time.Now().Format(layout), msg)
 	tru.statLogMsgs = append(tru.statLogMsgs, msg)
 }
@@ -100,12 +92,12 @@ func (ch *Channel) destroy(msg string) {
 		return
 	}
 
-	ch.tru.m.Lock()
-	defer ch.tru.m.Unlock()
+	ch.tru.mu.Lock()
+	defer ch.tru.mu.Unlock()
 
 	log.Println("channel destroy", ch.addr.String())
 
-	ch.sendQueue.retransmitTimer.Stop()
+	ch.sendQueue.destroy()
 	ch.stat.destroy()
 
 	delete(ch.tru.cannels, ch.addr.String())
@@ -137,7 +129,7 @@ func (ch *Channel) WriteTo(data []byte, delivery ...interface{}) (id int, err er
 
 // writeTo writes a packet with status and data to channel
 func (ch *Channel) writeTo(data []byte, stat int, delivery []interface{}, ids ...int) (id int, err error) {
-	if ch.stat.destroyed {
+	if ch.stat.isDestroyed() {
 		err = errors.New("channel destroyed")
 		return
 	}
@@ -218,36 +210,30 @@ func (ch *Channel) writeToDelay(status int) {
 
 	// Wait up to 100 ms if fist packet has retransmit attempt
 	var retransmitDelayCount = 0
-	if pac := ch.sendQueue.getFirst(); pac != nil {
-		for rta := pac.retransmitAttempts; rta > 0; retransmitDelayCount++ {
-			if retransmitDelayCount >= 10 {
-				break
-			}
-			// 10 ms sleet if retransmit attempt now
-			time.Sleep(10000 * time.Microsecond)
-		}
+	for rta := ch.sendQueue.getRetransmitAttempts(); rta > 0 && retransmitDelayCount < 10; retransmitDelayCount++ {
+		time.Sleep(10000 * time.Microsecond) // 10 ms sleet if retransmit attempt set now
 	}
 
 	// Get current delay
-	delay := time.Duration(ch.delay) * time.Microsecond
+	delay := time.Duration(ch.stat.sendDelay) * time.Microsecond
 
 	// Claculate new delay
-	var chDelay = ch.delay
+	var chSendDelay = ch.stat.getSendDelay()
 	if retransmitDelayCount == 0 {
 		switch {
-		case ch.delay > 100:
-			chDelay = ch.delay - 10
-		case ch.delay > 30:
-			chDelay = ch.delay - 1
+		case ch.stat.sendDelay > 100:
+			chSendDelay -= 10
+		case ch.stat.sendDelay > 30:
+			chSendDelay -= 1
 		}
 	} else {
-		chDelay = ch.delay + 10
+		chSendDelay += 10
 	}
 
 	// Set new delay
 	if time.Since(ch.stat.lastDelayCheck) > 50*time.Millisecond {
 		ch.stat.lastDelayCheck = time.Now()
-		ch.delay = chDelay
+		ch.stat.setSendDelay(chSendDelay)
 	}
 
 	// Execute current delay
@@ -287,8 +273,8 @@ func (ch *Channel) writeToSender(pac *Packet) {
 
 // newID create new channels packet id
 func (ch *Channel) newID() (id int) {
-	ch.tru.m.Lock()
-	defer ch.tru.m.Unlock()
+	ch.tru.mu.Lock()
+	defer ch.tru.mu.Unlock()
 
 	id = int(ch.id)
 	ch.id++
@@ -298,8 +284,8 @@ func (ch *Channel) newID() (id int) {
 
 // newExpectedID create new channels packet expected id
 func (ch *Channel) newExpectedID() (id int) {
-	ch.tru.m.Lock()
-	defer ch.tru.m.Unlock()
+	ch.tru.mu.Lock()
+	defer ch.tru.mu.Unlock()
 
 	ch.expectedID++
 	id = int(ch.expectedID)
@@ -314,6 +300,10 @@ func (ch *Channel) setTripTime(id int) (tt time.Duration, err error) {
 		err = errors.New("packet not found")
 		return
 	}
+
+	ch.stat.Lock()
+	defer ch.stat.Unlock()
+
 	tt = time.Since(pac.time)
 	ch.stat.tripTime = tt
 	ch.stat.tripTimeMidle = (ch.stat.tripTimeMidle*9 + tt) / 10
@@ -323,17 +313,19 @@ func (ch *Channel) setTripTime(id int) (tt time.Duration, err error) {
 
 // getTripTime return current channel trip time
 func (ch *Channel) getTripTime() time.Duration {
+	ch.stat.RLock()
+	defer ch.stat.RUnlock()
+
 	return ch.stat.tripTimeMidle
 }
 
 // setRetransmitTime set retransmit time to packet
-func (ch *Channel) setRetransmitTime(pac *Packet) (tt time.Time, err error) {
+func (ch *Channel) setRetransmitTime(pac *Packet) (rt time.Time, err error) {
 	rtt := minRTT
-
-	if ch.getTripTime() == 0 {
+	if tt := ch.getTripTime(); tt == 0 {
 		rtt = startRTT
 	} else {
-		rtt += ch.getTripTime()
+		rtt += tt
 	}
 
 	if pac.retransmitAttempts > 0 {
@@ -344,8 +336,7 @@ func (ch *Channel) setRetransmitTime(pac *Packet) (tt time.Time, err error) {
 		rtt = maxRTT
 	}
 
-	tt = time.Now().Add(rtt)
-	pac.retransmitTime = tt
+	pac.retransmitTime = time.Now().Add(rtt)
 	pac.time = time.Now()
 
 	return

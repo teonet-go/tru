@@ -11,6 +11,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"log"
+	"sync"
 	"time"
 )
 
@@ -24,6 +25,7 @@ type Packet struct {
 	delivery           PacketDeliveryFunc // Packet delivery callback function
 	deliveryTimeout    time.Duration      // Packet delivery callback timeout
 	deliveryTimer      time.Timer         // Packet delivery timeout timer
+	sync.RWMutex
 }
 
 // PacketDeliveryFunc packet delivery callback function calls when packet
@@ -184,4 +186,20 @@ func (p *Packet) distance(expectedID uint16, id uint16) int {
 		return int(diff)
 	}
 	return int(diff - packetIDlimit)
+}
+
+// getRetransmitAttempts return retransmit attempts value. This function
+// concurrent reads/writes saiflly in pair with setRetransmitAttempts()
+func (p *Packet) getRetransmitAttempts() (rta int) {
+	p.RLock()
+	defer p.RUnlock()
+	return p.retransmitAttempts
+}
+
+// setRetransmitAttempts set retransmit attempts value. This function
+// concurrent reads/writes saiflly in pair with getRetransmitAttempts()
+func (p *Packet) setRetransmitAttempts(rta int) {
+	p.Lock()
+	defer p.Unlock()
+	p.retransmitAttempts = rta
 }
