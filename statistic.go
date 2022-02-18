@@ -28,12 +28,14 @@ type statistic struct {
 
 	tripTime      time.Duration
 	tripTimeMidle time.Duration
-	send          int64
-	retransmit    int64
-	recv          int64
-	drop          int64
-	sendSpeed     speed
-	recvSpeed     speed
+	send          int64 // Number of send packets
+	sendSpeed     speed // Send speed in packets/sec
+	ackRecv       int64 // Number of ack to send received
+	ackRecvDrop   int64 // Number of dropped ack to send received
+	retransmit    int64 // Number of retransmit send packets
+	recv          int64 // Number of received packets
+	recvSpeed     speed // Receive speed in packets/sec
+	drop          int64 // Number of droped received packets, duplicate packets
 
 	sync.RWMutex
 }
@@ -79,6 +81,22 @@ func (s *statistic) setSend() {
 
 	s.send++
 	s.sendSpeed.add()
+}
+
+// setAckReceived set one ack packet received
+func (s *statistic) setAckReceived() {
+	s.Lock()
+	defer s.Unlock()
+
+	s.ackRecv++
+}
+
+// setAckDropReceived set one ack dropped packet received
+func (s *statistic) setAckDropReceived() {
+	s.Lock()
+	defer s.Unlock()
+
+	s.ackRecv++
 }
 
 // setRecv set one packet received
@@ -168,6 +186,8 @@ type ChannelStatistic struct {
 	Send  int64   // send packets
 	Ssec  int64   // send per second
 	Rsnd  int64   // resend packets
+	Ack   int64   // ack packet received
+	AckD  int64   // ack packet  received and droped (duplicate ack)
 	Recv  int64   // receive packets
 	Rsec  int64   // receive per second
 	Drop  int64   // drop received packets
@@ -212,6 +232,8 @@ func (tru *Tru) Statistic() (stat ChannelsStatistic) {
 			Send: ch.stat.send,
 			Ssec: int64(ch.stat.sendSpeed.get()),
 			Rsnd: ch.stat.retransmit,
+			Ack:  ch.stat.ackRecv,
+			AckD: ch.stat.ackRecvDrop,
 			Recv: ch.stat.recv,
 			Rsec: int64(ch.stat.recvSpeed.get()),
 			Drop: ch.stat.drop,
@@ -243,12 +265,12 @@ func (cs *ChannelsStatistic) String(cleanLine ...bool) string {
 	numRows := len(*cs)
 
 	// Create new simple table
-	formats := make([]string, 12)
+	formats := make([]string, 14)
 	formats[2] = "%5d"
-	formats[5] = "%5d"
-	formats[7] = "%3d"
-	formats[8] = "%3d"
-	formats[11] = "%.3f"
+	formats[7] = "%5d"
+	formats[9] = "%3d"
+	formats[10] = "%3d"
+	formats[13] = "%.3f"
 	st := new(stable.Stable).Lines().
 		Aligns(0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1).
 		Formats(formats...)

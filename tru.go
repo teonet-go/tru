@@ -190,8 +190,10 @@ func (tru *Tru) serve(n int, addr net.Addr, data []byte) {
 	case statusAck:
 		tt, err := ch.setTripTime(pac.ID())
 		if err != nil {
+			ch.stat.setAckDropReceived()
 			break
 		}
+		ch.stat.setAckReceived()
 		log.Printf("got ack to packet id %d, trip time: %.3f ms", pac.ID(), float64(tt.Microseconds())/1000.0)
 		pac, ok := ch.sendQueue.delete(pac.ID())
 		if delivery := pac.Delivery(); ok && delivery != nil {
