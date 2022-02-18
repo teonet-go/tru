@@ -39,7 +39,7 @@ func (tru *Tru) newChannel(addr net.Addr, serverMode ...bool) (ch *Channel, err 
 
 	msg := fmt.Sprint("new channel ", addr.String())
 	log.Println(msg)
-	tru.addToMsgsLog(msg)
+	tru.statMsgs.add(msg)
 
 	ch = &Channel{addr: addr, tru: tru, maxDataLen: tru.maxDataLen}
 	if len(serverMode) > 0 {
@@ -80,11 +80,11 @@ func (tru *Tru) getChannel(addr string) (ch *Channel, ok bool) {
 }
 
 // addToMsgsLog add message to log
-func (tru *Tru) addToMsgsLog(msg string) {
-	const layout = "2006-01-02 15:04:05.000000"
-	msg = fmt.Sprintf("%v %s", time.Now().Format(layout), msg)
-	tru.statLogMsgs = append(tru.statLogMsgs, msg)
-}
+// func (tru *Tru) addToMsgsLog(msg string) {
+// 	const layout = "2006-01-02 15:04:05.000000"
+// 	msg = fmt.Sprintf("%v %s", time.Now().Format(layout), msg)
+// 	tru.statMsgs = append(tru.statMsgs, msg)
+// }
 
 // destroy destroy channel
 func (ch *Channel) destroy(msg string) {
@@ -101,7 +101,7 @@ func (ch *Channel) destroy(msg string) {
 	ch.stat.destroy()
 
 	delete(ch.tru.cannels, ch.addr.String())
-	ch.tru.addToMsgsLog(msg)
+	ch.tru.statMsgs.add(msg)
 }
 
 // Close tru channel
