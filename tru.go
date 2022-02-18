@@ -180,6 +180,7 @@ func (tru *Tru) serve(n int, addr net.Addr, data []byte) {
 		return
 	}
 
+	// Process regular packets by status
 	switch pac.Status() {
 
 	case statusPing:
@@ -196,6 +197,7 @@ func (tru *Tru) serve(n int, addr net.Addr, data []byte) {
 		ch.stat.setAckReceived()
 		log.Printf("got ack to packet id %d, trip time: %.3f ms", pac.ID(), float64(tt.Microseconds())/1000.0)
 		pac, ok := ch.sendQueue.delete(pac.ID())
+		// Execute packet delivery callback
 		if delivery := pac.Delivery(); ok && delivery != nil {
 			pac.deliveryTimer.Stop()
 			go delivery(pac, nil)
@@ -206,12 +208,11 @@ func (tru *Tru) serve(n int, addr net.Addr, data []byte) {
 		return
 
 	case statusData, statusDataNext:
-		dist := pac.distance(ch.expectedID, pac.id)
 		pac.data, err = ch.decryptPacketData(pac.ID(), pac.Data())
 		if err != nil {
-			// log.Println("decrypt error:", err)
 			return
 		}
+		dist := pac.distance(ch.expectedID, pac.id)
 		ch.writeToAck(pac)
 		switch {
 		// Already processed packet (id < expectedID)
