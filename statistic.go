@@ -96,7 +96,7 @@ func (s *statistic) setAckDropReceived() {
 	s.Lock()
 	defer s.Unlock()
 
-	s.ackRecv++
+	s.ackRecvDrop++
 }
 
 // setRecv set one packet received
