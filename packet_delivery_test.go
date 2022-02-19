@@ -1,23 +1,29 @@
 package tru
 
 import (
-	"log"
 	"testing"
 	"time"
+
+	"github.com/kirill-scherba/tru/teolog"
 )
 
 func TestPacketDelivery(t *testing.T) {
 
+	log := teolog.New()
+	// log.SetLevel(teolog.Connect)
+	log.Info.Println("\n\n==== TestPacketDelivery started ====")
+
 	// create tru1
-	tru1, err := New(0)
+	tru1, err := New(0, log)
 	if err != nil {
 		t.Errorf("can't start tru1, err: %s", err)
 		return
 	}
+	defer tru1.Close()
 	tru1Addr := tru1.LocalAddr().String()
 
 	// create tru2
-	tru2, err := New(0)
+	tru2, err := New(0, log)
 	if err != nil {
 		t.Errorf("can't start tru2, err: %s", err)
 		return
@@ -29,6 +35,7 @@ func TestPacketDelivery(t *testing.T) {
 		t.Errorf("can't connect to tru1, err: %s", err)
 		return
 	}
+	defer tru2.Close()
 
 	// Create wait channel
 	wait := make(chan interface{})
@@ -40,7 +47,7 @@ func TestPacketDelivery(t *testing.T) {
 			t.Errorf("can't receive delivery callback from tru1, err: %s", err)
 			return
 		}
-		log.Println("got delivery answer to packet id", pac.ID())
+		log.Debugvvv.Println("got delivery answer to packet id", pac.ID())
 		wait <- nil
 	})
 	<-wait
@@ -52,7 +59,7 @@ func TestPacketDelivery(t *testing.T) {
 			t.Errorf("can't receive delivery callback timeout from tru1, err: %s", err)
 			return
 		}
-		log.Println("got delivery timeout to packet id", pac.ID())
+		log.Debugvvv.Println("got delivery timeout to packet id", pac.ID())
 		wait <- nil
 	}, 50*time.Millisecond)
 	ch.Close()

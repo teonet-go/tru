@@ -2,24 +2,32 @@ package tru
 
 import (
 	"testing"
+
+	"github.com/kirill-scherba/tru/teolog"
 )
 
 func TestReceiveQueue(t *testing.T) {
 
+	log := teolog.New()
+	// log.SetLevel(teolog.Connect)
+	log.Info.Println("\n\n==== TestReceiveQueue started ====")
+
 	// create tru1
-	tru1, err := New(0)
+	tru1, err := New(0, log)
 	if err != nil {
 		t.Errorf("can't start tru1, err: %s", err)
 		return
 	}
+	defer tru1.Close()
 	tru1Addr := tru1.LocalAddr().String()
 
 	// create tru2
-	tru2, err := New(0)
+	tru2, err := New(0, log)
 	if err != nil {
 		t.Errorf("can't start tru2, err: %s", err)
 		return
 	}
+	defer tru2.Close()
 
 	// tru2 connect to tru1
 	ch, err := tru2.Connect(tru1Addr)

@@ -7,13 +7,15 @@ package tru
 
 import (
 	"crypto/rsa"
+	"errors"
 	"flag"
 	"fmt"
-	"log"
 	"net"
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/kirill-scherba/tru/teolog"
 )
 
 // Tru connector
@@ -29,18 +31,52 @@ type Tru struct {
 	statTimer  *time.Timer         // Show statistic timer
 	privateKey *rsa.PrivateKey     // Common private key
 	maxDataLen int                 // Max data len in created packets, 0 - maximum UDP len
+	closed     bool                // Tru closed flag
 	mu         sync.RWMutex        // Channels map mutex
 }
 
+// Lengs of readerChData and senderChData
 const chanLen = 10
 
+// Teolog
+var log *teolog.Teolog
+
+// Global flag "drop" drop send paskets for testing
 var drop = flag.Int("drop", 0, "drop send packets")
 
 // New create new tru object and start listen udp packets
-func New(port int, reader ...ReaderFunc) (tru *Tru, err error) {
+func New(port int, params ...interface{} /* reader ...ReaderFunc */) (tru *Tru, err error) {
 
 	// Create tru object
 	tru = new(Tru)
+
+	// Parse parameters
+	for _, p := range params {
+		switch v := p.(type) {
+
+		// Global tru reader
+		case func(ch *Channel, pac *Packet, err error) (processed bool):
+			tru.reader = v
+		case ReaderFunc:
+			tru.reader = v
+
+		// Teonet logger
+		case *teolog.Teolog:
+			log = v
+
+		// Wrong parameter
+		default:
+			err = errors.New("wrong parameter")
+			return
+		}
+	}
+
+	// Log define
+	if log == nil {
+		log = teolog.New()
+	}
+
+	// Init tru object
 	tru.cannels = make(map[string]*Channel)
 	tru.connect.connects = make(map[string]*connectData)
 	tru.conn, err = net.ListenPacket("udp", ":"+strconv.Itoa(port))
@@ -57,11 +93,6 @@ func New(port int, reader ...ReaderFunc) (tru *Tru, err error) {
 		return
 	}
 
-	// Add global reader
-	if len(reader) > 0 {
-		tru.reader = reader[0]
-	}
-
 	// Start packet reader processing
 	tru.readerCh = make(chan readerChData, chanLen)
 	go tru.readerProccess()
@@ -69,6 +100,8 @@ func New(port int, reader ...ReaderFunc) (tru *Tru, err error) {
 	// Start packet sender processing
 	tru.senderCh = make(chan senderChData, chanLen)
 	go tru.senderProccess()
+
+	log.Connect.Println("tru created")
 
 	// start listen to incoming udp packets
 	go tru.listen()
@@ -86,8 +119,10 @@ func (tru *Tru) Close() {
 		return
 	}
 	tru.mu.RUnlock()
+	tru.closed = true
 	tru.conn.Close()
 	tru.StopPrintStatistic()
+	log.Connect.Println("tru closed")
 }
 
 // SetSendDelay set default (start) clients send delay
@@ -133,15 +168,16 @@ func (tru *Tru) writeTo(data []byte, addri interface{}) (err error) {
 // listen to incoming udp packets
 func (tru *Tru) listen() {
 	defer func() {
-		log.Printf("stop listen\n")
+		log.Connect.Println("stop listen", tru.LocalAddr().String())
 		tru.conn.Close()
 	}()
-	log.Printf("start listen at %s\n", tru.LocalAddr().String())
+	log.Connect.Println("start listen at", tru.LocalAddr().String())
 
-	for {
+	for !tru.closed {
 		buf := make([]byte, 64*1024)
 		n, addr, err := tru.conn.ReadFrom(buf)
 		if err != nil {
+			// log.Error.Println("ReadFrom error:", err)
 			continue
 		}
 
@@ -157,7 +193,7 @@ func (tru *Tru) serve(n int, addr net.Addr, data []byte) {
 	err := pac.UnmarshalBinary(data)
 	if err != nil {
 		// Wrong packet received from addr
-		log.Printf("got wrong packet %d from %s, data: %s\n", n, addr.String(), data)
+		log.Debugvvv.Printf("got wrong packet %d from %s, data: %s\n", n, addr.String(), data)
 		return
 	}
 
@@ -195,7 +231,7 @@ func (tru *Tru) serve(n int, addr net.Addr, data []byte) {
 			break
 		}
 		ch.stat.setAckReceived()
-		log.Printf("got ack to packet id %d, trip time: %.3f ms", pac.ID(), float64(tt.Microseconds())/1000.0)
+		log.Debugvv.Printf("got ack to packet id %d, trip time: %.3f ms", pac.ID(), float64(tt.Microseconds())/1000.0)
 		pac, ok := ch.sendQueue.delete(pac.ID())
 		// Execute packet delivery callback
 		if delivery := pac.Delivery(); ok && delivery != nil {

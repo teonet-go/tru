@@ -9,7 +9,6 @@ package tru
 import (
 	"errors"
 	"fmt"
-	"log"
 	"math/rand"
 	"net"
 	"time"
@@ -38,7 +37,7 @@ func (tru *Tru) newChannel(addr net.Addr, serverMode ...bool) (ch *Channel, err 
 	defer tru.mu.Unlock()
 
 	msg := fmt.Sprint("new channel ", addr.String())
-	log.Println(msg)
+	log.Connect.Println(msg)
 	tru.statMsgs.add(msg)
 
 	ch = &Channel{addr: addr, tru: tru, maxDataLen: tru.maxDataLen}
@@ -61,7 +60,7 @@ func (tru *Tru) newChannel(addr net.Addr, serverMode ...bool) (ch *Channel, err 
 			if ch.serverMode {
 				return
 			}
-			log.Println("channel ping", ch.addr.String())
+			log.Debugvvv.Println("channel ping", ch.addr.String())
 			ch.writeToPing()
 		},
 	)
@@ -95,7 +94,7 @@ func (ch *Channel) destroy(msg string) {
 	ch.tru.mu.Lock()
 	defer ch.tru.mu.Unlock()
 
-	log.Println("channel destroy", ch.addr.String())
+	log.Connect.Println(msg)
 
 	ch.sendQueue.destroy()
 	ch.stat.destroy()
