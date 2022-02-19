@@ -241,7 +241,7 @@ func (tru *Tru) Statistic() (stat ChannelsStatistic) {
 			RQ: uint(ch.recvQueue.len()),
 			// RTA: get in getRetransmitAttempts()
 			Delay: ch.stat.sendDelay,
-			TT:    float64(ch.stat.tripTime.Microseconds()) / 1000.0,
+			TT:    float64(ch.stat.tripTimeMidle.Microseconds()) / 1000.0,
 		})
 		ch.stat.RUnlock()
 		getRetransmitAttempts(stat, ch, i)
