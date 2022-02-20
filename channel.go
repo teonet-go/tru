@@ -212,6 +212,7 @@ func (ch *Channel) writeToDelay(status int) {
 	var retransmitDelayCount = 0
 	for rta := ch.sendQueue.getRetransmitAttempts(); rta > 0 && retransmitDelayCount < 10; retransmitDelayCount++ {
 		time.Sleep(10000 * time.Microsecond) // 10 ms sleet if retransmit attempt set now
+		rta = ch.sendQueue.getRetransmitAttempts()
 	}
 
 	// Get current delay
