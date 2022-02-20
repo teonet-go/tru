@@ -10,7 +10,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
-	"log"
 	"sync"
 	"time"
 )
@@ -149,9 +148,10 @@ func (p *Packet) SetDelivery(delivery PacketDeliveryFunc) *Packet {
 	if delivery == nil {
 		return p
 	}
-	log.Println("set delivery func")
+	log.Debugvvv.Println("set delivery func, id", p.ID())
 	p.delivery = delivery
 	p.deliveryTimer = *time.AfterFunc(p.deliveryTimeout, func() {
+		// log.Error.Println("delivery timeout, id", p.ID())
 		err := errors.New("delivery timeout")
 		p.delivery(p, err)
 	})
@@ -160,7 +160,7 @@ func (p *Packet) SetDelivery(delivery PacketDeliveryFunc) *Packet {
 
 // SetDeliveryTimeout set delivery function timeout
 func (p *Packet) SetDeliveryTimeout(timeout time.Duration) *Packet {
-	log.Println("set delivery timeout")
+	log.Debugvvv.Println("set delivery timeout, id", p.ID())
 	p.deliveryTimeout = timeout
 	return p
 }

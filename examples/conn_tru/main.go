@@ -6,23 +6,30 @@ import (
 	"crypto/rand"
 	"flag"
 	"fmt"
-	"io/ioutil"
-	"log"
 	"os"
 	"os/signal"
+	"runtime"
+	"runtime/pprof"
 	"syscall"
 	"time"
 
 	"github.com/kirill-scherba/tru"
+	"github.com/kirill-scherba/tru/teolog"
 )
 
 var port = flag.Int("p", 0, "local port number")
 var addr = flag.String("a", "", "remote address to connect to")
-var nolog = flag.Bool("nolog", false, "disable log messages")
+var loglevel = flag.String("loglevel", "", "set log level")
+var logfilter = flag.String("logfilter", "", "set log filter")
 var stat = flag.Bool("stat", false, "print statistic")
 var delay = flag.Int("delay", 0, "send delay in Microseconds")
 var sendlen = flag.Int("sendlen", 0, "send packet data length")
 var datalen = flag.Int("datalen", 0, "set max data len in created packets, 0 - maximum UDP len")
+
+var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to `file`")
+var memprofile = flag.String("memprofile", "", "write memory profile to `file`")
+
+var log = teolog.New()
 
 func main() {
 
@@ -32,16 +39,43 @@ func main() {
 	// Parse flags
 	flag.Parse()
 
-	// Set log options
-	log.SetFlags(log.LstdFlags | log.Lshortfile | log.Lmicroseconds)
-	if *nolog {
-		log.SetOutput(ioutil.Discard)
+	// Set log options and filter
+	var logFilter teolog.TeologFilter
+	log.SetLevel(*loglevel)
+	if *logfilter != "" {
+		logFilter = teolog.Logfilter(*logfilter)
+	}
+
+	// CPU profiller
+	if *cpuprofile != "" {
+		f, err := os.Create(*cpuprofile)
+		if err != nil {
+			log.Debugvvv.Fatal("could not create CPU profile: ", err)
+		}
+		defer f.Close() // error handling omitted for example
+		if err := pprof.StartCPUProfile(f); err != nil {
+			log.Debugvvv.Fatal("could not start CPU profile: ", err)
+		}
+		defer pprof.StopCPUProfile()
+	}
+
+	// Memory profiler
+	if *memprofile != "" {
+		f, err := os.Create(*memprofile)
+		if err != nil {
+			log.Debugvvv.Fatal("could not create memory profile: ", err)
+		}
+		defer f.Close() // error handling omitted for example
+		runtime.GC()    // get up-to-date statistics
+		if err := pprof.WriteHeapProfile(f); err != nil {
+			log.Debugvvv.Fatal("could not write memory profile: ", err)
+		}
 	}
 
 	// Create server connection and start listen incominng packets
-	tru, err := tru.New(*port, Reader)
+	tru, err := tru.New(*port, Reader, log, logFilter)
 	if err != nil {
-		log.Fatal(err)
+		log.Error.Fatal("can't create tru, err: ", err)
 	}
 	defer tru.Close()
 	tru.SetMaxDataLen(*datalen)
@@ -71,7 +105,11 @@ func main() {
 
 // Reader read packets from connected peers
 func Reader(ch *tru.Channel, pac *tru.Packet, err error) (processed bool) {
-	log.Printf("got %d byte from %s, id %d: %s\n", pac.Len(), ch.Addr().String(), pac.ID(), pac.Data())
+	if err != nil {
+		log.Debug.Println("got error in main reader:", err)
+		return
+	}
+	log.Debugv.Printf("got %d byte from %s, id %d: %s\n", pac.Len(), ch.Addr().String(), pac.ID(), pac.Data())
 	ch.WriteTo(append([]byte("answer to "), pac.Data()...))
 	return
 }
@@ -83,13 +121,17 @@ func Sender(t *tru.Tru, addr string) {
 	}
 
 connect:
-	log.Println("connect to peer", addr)
+	log.Debug.Println("connect to peer", addr)
 	ch, err := t.Connect(addr, func(ch *tru.Channel, pac *tru.Packet, err error) (processed bool) {
-		log.Printf("got %d byte from %s, id %d: %s\n", pac.Len(), ch.Addr().String(), pac.ID(), pac.Data())
+		if err != nil {
+			log.Debug.Println("got error in channel reader, err:", err)
+			return
+		}
+		log.Debugv.Printf("got %d byte from %s, id %d: %s\n", pac.Len(), ch.Addr().String(), pac.ID(), pac.Data())
 		return true
 	})
 	if err != nil {
-		log.Println(err)
+		log.Connect.Println(err)
 		time.Sleep(5 * time.Second)
 		goto connect
 	}
@@ -106,11 +148,11 @@ connect:
 
 		_, err := ch.WriteTo(data)
 		if err != nil {
-			log.Println(err)
+			log.Connect.Println(err)
 			goto connect
 		}
-		log.Printf("send %d bytes data to %s, data: %s\n", len(data), ch.Addr().String(), data)
+		log.Debugv.Printf("send %d bytes data to %s, data: %s\n", len(data), ch.Addr().String(), data)
 
-		// time.Sleep(time.Duration(*delay) * time.Microsecond)
+		time.Sleep(time.Duration(*delay) * time.Microsecond)
 	}
 }

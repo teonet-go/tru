@@ -7,19 +7,21 @@ package tru
 
 import (
 	"crypto/rsa"
+	"errors"
 	"flag"
 	"fmt"
-	"log"
 	"net"
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/kirill-scherba/tru/teolog"
 )
 
 // Tru connector
 type Tru struct {
 	conn       net.PacketConn      // Local connection
-	cannels    map[string]*Channel // Channels map
+	channels   map[string]*Channel // Channels map
 	reader     ReaderFunc          // Global tru reader
 	readerCh   chan readerChData   // Reader channel
 	senderCh   chan senderChData   // Sender channel
@@ -29,19 +31,66 @@ type Tru struct {
 	statTimer  *time.Timer         // Show statistic timer
 	privateKey *rsa.PrivateKey     // Common private key
 	maxDataLen int                 // Max data len in created packets, 0 - maximum UDP len
+	listenStop chan interface{}    // Tru listen wait stop channel
 	mu         sync.RWMutex        // Channels map mutex
 }
 
+// Lengs of readerChData and senderChData
 const chanLen = 10
 
+// Teolog
+var log *teolog.Teolog
+
+// Global flag "drop" drop send paskets for testing
 var drop = flag.Int("drop", 0, "drop send packets")
 
-// New create new tru object and start listen udp packets
-func New(port int, reader ...ReaderFunc) (tru *Tru, err error) {
+var ErrTruClosed = errors.New("tru listner closed")
+
+// New create new tru object and start listen udp packets. Parameters:
+//   port int: local port number, 0 for any;
+//   ReaderFunc: message receiver callback function;
+//   *teolog.Teolog: pointer to teolog
+//   teolog.TeologFilter: loggers filter
+func New(port int, params ...interface{}) (tru *Tru, err error) {
 
 	// Create tru object
 	tru = new(Tru)
-	tru.cannels = make(map[string]*Channel)
+
+	// Parse parameters
+	var logfilter teolog.TeologFilter
+	for _, p := range params {
+		switch v := p.(type) {
+
+		// Global tru reader
+		case func(ch *Channel, pac *Packet, err error) (processed bool):
+			tru.reader = v
+		case ReaderFunc:
+			tru.reader = v
+
+		// Teonet logger
+		case *teolog.Teolog:
+			log = v
+
+		// Teonet loggers filter
+		case teolog.TeologFilter:
+			logfilter = v
+
+		// Wrong parameter
+		default:
+			err = errors.New("wrong parameter")
+			return
+		}
+	}
+
+	// Log define and set filter
+	if log == nil {
+		log = teolog.New()
+	}
+	log.SetFilter(logfilter)
+
+	// Init tru object
+	tru.listenStop = make(chan interface{})
+	tru.channels = make(map[string]*Channel)
 	tru.connect.connects = make(map[string]*connectData)
 	tru.conn, err = net.ListenPacket("udp", ":"+strconv.Itoa(port))
 	if err != nil {
@@ -57,11 +106,6 @@ func New(port int, reader ...ReaderFunc) (tru *Tru, err error) {
 		return
 	}
 
-	// Add global reader
-	if len(reader) > 0 {
-		tru.reader = reader[0]
-	}
-
 	// Start packet reader processing
 	tru.readerCh = make(chan readerChData, chanLen)
 	go tru.readerProccess()
@@ -70,24 +114,29 @@ func New(port int, reader ...ReaderFunc) (tru *Tru, err error) {
 	tru.senderCh = make(chan senderChData, chanLen)
 	go tru.senderProccess()
 
+	log.Connect.Println("tru created")
+
 	// start listen to incoming udp packets
 	go tru.listen()
 
 	return
 }
 
-// Close close tru listner and all connected channels
+// Close tru listner and all connected channels
 func (tru *Tru) Close() {
-	tru.mu.RLock()
-	for _, ch := range tru.cannels {
-		tru.mu.RUnlock()
-		ch.Close()
-		tru.Close()
-		return
+
+	// Send error message to channel reader
+	if tru.reader != nil {
+		tru.reader(nil, nil, ErrTruClosed)
 	}
-	tru.mu.RUnlock()
-	tru.conn.Close()
+
+	// Close all channels
+	tru.getChannelEach(func(ch *Channel) { ch.Close() })
+
+	// Stop listner and statistic
+	tru.stopListen()
 	tru.StopPrintStatistic()
+	log.Connect.Println("tru closed")
 }
 
 // SetSendDelay set default (start) clients send delay
@@ -132,21 +181,38 @@ func (tru *Tru) writeTo(data []byte, addri interface{}) (err error) {
 
 // listen to incoming udp packets
 func (tru *Tru) listen() {
-	defer func() {
-		log.Printf("stop listen\n")
-		tru.conn.Close()
-	}()
-	log.Printf("start listen at %s\n", tru.LocalAddr().String())
+	log.Connect.Println("start listen at", tru.LocalAddr().String())
+	defer log.Connect.Println("stop listen", tru.LocalAddr().String())
 
 	for {
-		buf := make([]byte, 64*1024)
-		n, addr, err := tru.conn.ReadFrom(buf)
-		if err != nil {
-			continue
-		}
+		select {
 
-		tru.serve(n, addr, buf[:n])
+		// Check channel closed to stop listen and return
+		case _, ok := <-tru.listenStop:
+			if !ok {
+				log.Debug.Println("listen wait channel closed")
+				return
+			}
+
+		// Read data from tru connect (from UDP port)
+		default:
+			buf := make([]byte, 64*1024)
+			n, addr, err := tru.conn.ReadFrom(buf)
+			if err != nil {
+				// log.Error.Println("ReadFrom error:", err)
+				break
+			}
+			if n > 0 {
+				tru.serve(n, addr, buf[:n])
+			}
+		}
 	}
+}
+
+// stopListen stop listen to incoming udp packets
+func (tru *Tru) stopListen() {
+	close(tru.listenStop) // close listen wait channel to stop listen
+	tru.conn.Close()
 }
 
 // serve received packet
@@ -157,7 +223,7 @@ func (tru *Tru) serve(n int, addr net.Addr, data []byte) {
 	err := pac.UnmarshalBinary(data)
 	if err != nil {
 		// Wrong packet received from addr
-		log.Printf("got wrong packet %d from %s, data: %s\n", n, addr.String(), data)
+		log.Debugvvv.Printf("got wrong packet %d from %s, data: %s\n", n, addr.String(), data)
 		return
 	}
 
@@ -180,6 +246,7 @@ func (tru *Tru) serve(n int, addr net.Addr, data []byte) {
 		return
 	}
 
+	// Process regular packets by status
 	switch pac.Status() {
 
 	case statusPing:
@@ -190,10 +257,13 @@ func (tru *Tru) serve(n int, addr net.Addr, data []byte) {
 	case statusAck:
 		tt, err := ch.setTripTime(pac.ID())
 		if err != nil {
+			ch.stat.setAckDropReceived()
 			break
 		}
-		log.Printf("got ack to packet id %d, trip time: %.3f ms", pac.ID(), float64(tt.Microseconds())/1000.0)
+		ch.stat.setAckReceived()
+		log.Debugvv.Printf("got ack to packet id %d, trip time: %.3f ms", pac.ID(), float64(tt.Microseconds())/1000.0)
 		pac, ok := ch.sendQueue.delete(pac.ID())
+		// Execute packet delivery callback
 		if delivery := pac.Delivery(); ok && delivery != nil {
 			pac.deliveryTimer.Stop()
 			go delivery(pac, nil)
@@ -204,12 +274,11 @@ func (tru *Tru) serve(n int, addr net.Addr, data []byte) {
 		return
 
 	case statusData, statusDataNext:
-		dist := pac.distance(ch.expectedID, pac.id)
 		pac.data, err = ch.decryptPacketData(pac.ID(), pac.Data())
 		if err != nil {
-			// log.Println("decrypt error:", err)
 			return
 		}
+		dist := pac.distance(ch.expectedID, pac.id)
 		ch.writeToAck(pac)
 		switch {
 		// Already processed packet (id < expectedID)

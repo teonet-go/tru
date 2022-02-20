@@ -28,12 +28,14 @@ type statistic struct {
 
 	tripTime      time.Duration
 	tripTimeMidle time.Duration
-	send          int64
-	retransmit    int64
-	recv          int64
-	drop          int64
-	sendSpeed     speed
-	recvSpeed     speed
+	send          int64 // Number of send packets
+	sendSpeed     speed // Send speed in packets/sec
+	ackRecv       int64 // Number of ack to send received
+	ackRecvDrop   int64 // Number of dropped ack to send received
+	retransmit    int64 // Number of retransmit send packets
+	recv          int64 // Number of received packets
+	recvSpeed     speed // Receive speed in packets/sec
+	drop          int64 // Number of droped received packets, duplicate packets
 
 	sync.RWMutex
 }
@@ -79,6 +81,22 @@ func (s *statistic) setSend() {
 
 	s.send++
 	s.sendSpeed.add()
+}
+
+// setAckReceived set one ack packet received
+func (s *statistic) setAckReceived() {
+	s.Lock()
+	defer s.Unlock()
+
+	s.ackRecv++
+}
+
+// setAckDropReceived set one ack dropped packet received
+func (s *statistic) setAckDropReceived() {
+	s.Lock()
+	defer s.Unlock()
+
+	s.ackRecvDrop++
 }
 
 // setRecv set one packet received
@@ -168,6 +186,8 @@ type ChannelStatistic struct {
 	Send  int64   // send packets
 	Ssec  int64   // send per second
 	Rsnd  int64   // resend packets
+	Ack   int64   // ack packet received
+	AckD  int64   // ack packet  received and droped (duplicate ack)
 	Recv  int64   // receive packets
 	Rsec  int64   // receive per second
 	Drop  int64   // drop received packets
@@ -205,13 +225,15 @@ func (tru *Tru) Statistic() (stat ChannelsStatistic) {
 	var i int
 	mu.Lock()
 	tru.mu.RLock()
-	for _, ch := range tru.cannels {
+	for _, ch := range tru.channels {
 		ch.stat.RLock()
 		stat = append(stat, ChannelStatistic{
 			Addr: ch.addr.String(),
 			Send: ch.stat.send,
 			Ssec: int64(ch.stat.sendSpeed.get()),
 			Rsnd: ch.stat.retransmit,
+			Ack:  ch.stat.ackRecv,
+			AckD: ch.stat.ackRecvDrop,
 			Recv: ch.stat.recv,
 			Rsec: int64(ch.stat.recvSpeed.get()),
 			Drop: ch.stat.drop,
@@ -219,7 +241,7 @@ func (tru *Tru) Statistic() (stat ChannelsStatistic) {
 			RQ: uint(ch.recvQueue.len()),
 			// RTA: get in getRetransmitAttempts()
 			Delay: ch.stat.sendDelay,
-			TT:    float64(ch.stat.tripTime.Microseconds()) / 1000.0,
+			TT:    float64(ch.stat.tripTimeMidle.Microseconds()) / 1000.0,
 		})
 		ch.stat.RUnlock()
 		getRetransmitAttempts(stat, ch, i)
@@ -243,17 +265,17 @@ func (cs *ChannelsStatistic) String(cleanLine ...bool) string {
 	numRows := len(*cs)
 
 	// Create new simple table
-	formats := make([]string, 12)
+	formats := make([]string, 14)
 	formats[2] = "%5d"
-	formats[5] = "%5d"
-	formats[7] = "%3d"
-	formats[8] = "%3d"
-	formats[11] = "%.3f"
+	formats[7] = "%5d"
+	formats[9] = "%3d"
+	formats[10] = "%3d"
+	formats[13] = "%.3f"
 	st := new(stable.Stable).Lines().
-		Aligns(0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1).
+		Aligns(0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1).
 		Formats(formats...)
 	if numRows > 1 {
-		st.Totals(&ChannelStatistic{}, 0, 1, 1, 1, 1, 1, 1)
+		st.Totals(&ChannelStatistic{}, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1)
 		numRows = 1
 	}
 	if len(cleanLine) > 0 && cleanLine[0] {
@@ -285,20 +307,15 @@ func (tru *Tru) PrintStatistic() {
 func (tru *Tru) printStatistic(prnt bool, next ...time.Time) {
 	var start time.Time
 	if len(next) == 0 {
-		start = time.Now()
-		if prnt {
-			var str string
-			str += "\033c"    // clear screen
-			str += "\033[s"   // save the cursor position
-			str += "\033[?7l" // no wrap
-			fmt.Print(str)
-		}
+		// First screen
+		start = time.Now() // set start time
 	} else {
+		// Next screens
 		start = next[0] // get start time from parameter
 	}
 
-	// getLog return log string
-	var getLog = func(tableLen int) (str string) {
+	// getLog return messages log: str - log in strung, n - number lines in log
+	var getLog = func(tableLen int) (str string, n int) {
 		_, h, err := tru.getTermSize()
 
 		from := 0
@@ -312,15 +329,22 @@ func (tru *Tru) printStatistic(prnt bool, next ...time.Time) {
 		for i := from; i < l; i++ {
 			str += "\033[K" + tru.statMsgs.get(i) + "\n"
 		}
+		n = l - from
 		return
 	}
 
 	// getStat return string with stat header, table and logs
 	var getStat = func() (str string) {
+
+		// Statistic to table in string
 		table, numRows := tru.statToString(true)
-		str += "\033[?25l" // hide cursor
-		str += "\033[u"    // restore the cursor position
-		// "\033[K" - clear line
+
+		// Header terminal commands
+		str += "\033[s"    // save the cursor position
+		str += "\033[1;1H" // set cursor position
+		str += "\033[?7l"  // no wrap
+
+		// Table and title
 		str += fmt.Sprintf("\033[KTRU %s, RCH: %d, SCH: %d, run time: %v\n\033[K%s\n\033[K",
 			tru.LocalAddr().String(),
 			len(tru.readerCh),
@@ -328,8 +352,18 @@ func (tru *Tru) printStatistic(prnt bool, next ...time.Time) {
 			time.Since(start),
 			table,
 		)
-		str += "\033[K\n"
-		str += getLog(numRows + 3)
+
+		// Log with main messages
+		msglog, n := getLog(numRows + 3) // get messages log
+		str += "\033[K\n"                // clear line
+		str += msglog                    // messages
+
+		// Footer terminal command
+		str += "\033[K\n"                              // clear line
+		str += fmt.Sprintf("\033[%d;r", numRows+3+n+1) // set scroll area
+		str += "\033[u"                                // restore the cursor position
+		str += "\033[?7h"                              // wrap
+
 		return
 	}
 
@@ -352,8 +386,8 @@ func (tru *Tru) StopPrintStatistic() {
 
 	if tru.statTimer != nil {
 		tru.statTimer.Stop()
-		fmt.Print("\033[?25h") // show cursor
-		fmt.Print("\033[?7h")  // wrap
+		fmt.Print("\033[r") // reset scroll area
+		fmt.Print("\033[u") // restore the cursor position
 	}
 }
 

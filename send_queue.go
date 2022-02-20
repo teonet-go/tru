@@ -9,7 +9,6 @@ package tru
 import (
 	"container/list"
 	"fmt"
-	"log"
 	"sync"
 	"time"
 )
@@ -48,7 +47,7 @@ func (s *sendQueue) add(pac *Packet) {
 
 	id := uint16(pac.ID())
 	s.index[id] = s.queue.PushBack(pac)
-	log.Println("add to send queue", pac.ID())
+	log.Debugvvv.Println("add to send queue", pac.ID())
 }
 
 // delete packet from send queue
@@ -60,7 +59,7 @@ func (s *sendQueue) delete(id int) (pac *Packet, ok bool) {
 	if ok {
 		s.queue.Remove(e)
 		delete(s.index, uint16(id))
-		log.Println("delete from send queue", pac.ID())
+		log.Debugvvv.Println("delete from send queue", pac.ID())
 	}
 	return
 }
