@@ -7,8 +7,10 @@
 package tru
 
 import (
+	"flag"
 	"fmt"
 	"sort"
+	"sync"
 	"time"
 
 	"github.com/kirill-scherba/stable"
@@ -16,12 +18,13 @@ import (
 )
 
 type statistic struct {
-	destroyed          bool
-	started            time.Time
-	lastActivity       time.Time
-	lastSend           time.Time
-	lastDelayCheck     time.Time
-	checkActivityTimer *time.Timer
+	destroyed          bool        // Channel is destoroyed
+	started            time.Time   // Channel started time
+	lastActivity       time.Time   // Last activity in channel (last received)
+	lastSend           time.Time   // Last send to remote peer
+	lastDelayCheck     time.Time   // Last delay check
+	checkActivityTimer *time.Timer // Check activity timer
+	sendDelay          int         // Client send delay
 
 	tripTime      time.Duration
 	tripTimeMidle time.Duration
@@ -31,6 +34,8 @@ type statistic struct {
 	drop          int64
 	sendSpeed     speed
 	recvSpeed     speed
+
+	sync.RWMutex
 }
 
 const (
@@ -38,6 +43,8 @@ const (
 	pingInactiveAfter       = 4 * time.Second
 	disconnectInactiveAfter = 5 * time.Second
 )
+
+var stathide = flag.Bool("stathide", false, "hide statistic (for debuging)")
 
 // init statistic
 func (s *statistic) init(inactive, keepalive func()) {
@@ -50,41 +57,104 @@ func (s *statistic) init(inactive, keepalive func()) {
 
 // destroy statistic
 func (s *statistic) destroy() {
+	s.Lock()
+	defer s.Unlock()
+
 	s.checkActivityTimer.Stop()
 	s.sendSpeed.destroy()
 	s.recvSpeed.destroy()
 	s.destroyed = true
 }
 
+func (s *statistic) isDestroyed() bool {
+	s.RLock()
+	defer s.RUnlock()
+	return s.destroyed
+}
+
 // setSend set one packet send
 func (s *statistic) setSend() {
+	s.Lock()
+	defer s.Unlock()
+
 	s.send++
 	s.sendSpeed.add()
 }
 
 // setRecv set one packet received
 func (s *statistic) setRecv() {
+	s.Lock()
+	defer s.Unlock()
+
 	s.recv++
 	s.recvSpeed.add()
 }
 
 // setLastActivity set channels last activity time
 func (s *statistic) setLastActivity() {
+	s.Lock()
+	defer s.Unlock()
+
 	s.lastActivity = time.Now()
+}
+
+// getLastActivity return channels last activity time
+func (s *statistic) getLastActivity() time.Time {
+	s.RLock()
+	defer s.RUnlock()
+
+	return s.lastActivity
+}
+
+// setRetransmit set channels retransmit packet
+func (s *statistic) setRetransmit() {
+	s.Lock()
+	defer s.Unlock()
+
+	s.retransmit++
+}
+
+// setDrop set channels drop packet
+func (s *statistic) setDrop() {
+	s.Lock()
+	defer s.Unlock()
+
+	s.drop++
+}
+
+// setSendDelay set channels send delay
+func (s *statistic) setSendDelay(sendDelay int) {
+	s.Lock()
+	defer s.Unlock()
+
+	s.sendDelay = sendDelay
+}
+
+// getSendDelay return channels send delay
+func (s *statistic) getSendDelay() int {
+	s.RLock()
+	defer s.RUnlock()
+
+	return s.sendDelay
 }
 
 // checkActivity check channel activity every second and call inactive func
 // if channel inactive time grate than disconnectInactiveAfter time constant,
 // and call keepalive func if channel inactive time grate than pingInactiveAfter
 func (s *statistic) checkActivity(inactive, keepalive func()) {
+	s.Lock()
+	defer s.Unlock()
+
 	s.checkActivityTimer = time.AfterFunc(checkInactiveAfter, func() {
+
+		lastActivity := s.getLastActivity()
 		switch {
 
-		case time.Since(s.lastActivity) > disconnectInactiveAfter:
+		case time.Since(lastActivity) > disconnectInactiveAfter:
 			inactive()
 			return
 
-		case time.Since(s.lastActivity) > pingInactiveAfter:
+		case time.Since(lastActivity) > pingInactiveAfter:
 			keepalive()
 		}
 
@@ -112,34 +182,52 @@ type ChannelsStatistic []ChannelStatistic
 
 // Statistic get statistic
 func (tru *Tru) Statistic() (stat ChannelsStatistic) {
-	tru.m.RLock()
-	defer tru.m.RUnlock()
 
-	// Get rta function
-	rta := func(ch *Channel) (rta int) {
-		if pac := ch.sendQueue.getFirst(); pac != nil {
-			rta = pac.retransmitAttempts
-		}
-		return
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+
+	// The Statistic function needs values from send queue and send queue needs
+	// values from statistic so they race. We use WaitGroup and goroutines which
+	// wait while send queue unlock and add values to ChannelsStatistic slice.
+	getRetransmitAttempts := func(stat ChannelsStatistic, ch *Channel, i int) {
+		wg.Add(1)
+		go func() {
+			mu.Lock()
+			defer mu.Unlock()
+			defer wg.Done()
+			// Add RTA and SQ to channel statistic slice
+			stat[i].RTA = ch.sendQueue.getRetransmitAttempts()
+			stat[i].SQ = uint(ch.sendQueue.len())
+		}()
 	}
 
 	// Append channels statistic to slice
+	var i int
+	mu.Lock()
+	tru.mu.RLock()
 	for _, ch := range tru.cannels {
+		ch.stat.RLock()
 		stat = append(stat, ChannelStatistic{
-			Addr:  ch.addr.String(),
-			Send:  ch.stat.send,
-			Ssec:  int64(ch.stat.sendSpeed.get()),
-			Rsnd:  ch.stat.retransmit,
-			Recv:  ch.stat.recv,
-			Rsec:  int64(ch.stat.recvSpeed.get()),
-			Drop:  ch.stat.drop,
-			SQ:    uint(ch.sendQueue.len()),
-			RQ:    uint(ch.recvQueue.len()),
-			RTA:   rta(ch),
-			Delay: ch.delay,
-			TT:    float64(ch.getTripTime().Microseconds()) / 1000.0,
+			Addr: ch.addr.String(),
+			Send: ch.stat.send,
+			Ssec: int64(ch.stat.sendSpeed.get()),
+			Rsnd: ch.stat.retransmit,
+			Recv: ch.stat.recv,
+			Rsec: int64(ch.stat.recvSpeed.get()),
+			Drop: ch.stat.drop,
+			// SQ:  get in getRetransmitAttempts()
+			RQ: uint(ch.recvQueue.len()),
+			// RTA: get in getRetransmitAttempts()
+			Delay: ch.stat.sendDelay,
+			TT:    float64(ch.stat.tripTime.Microseconds()) / 1000.0,
 		})
+		ch.stat.RUnlock()
+		getRetransmitAttempts(stat, ch, i)
+		i++
 	}
+	tru.mu.RUnlock()
+	mu.Unlock()
+	wg.Wait()
 
 	// Sort slice with channels statistic by address
 	sort.Slice(stat, func(i, j int) bool {
@@ -191,15 +279,26 @@ func (cs *ChannelsStatistic) NumRows() (numRows int) {
 
 // PrintStatistic print tru statistics continously
 func (tru *Tru) PrintStatistic() {
+	tru.printStatistic(!*stathide)
+}
 
-	var printStat func()
-	var start = time.Now()
-	fmt.Print("\033c")    // clear screen
-	fmt.Print("\033[s")   // save the cursor position
-	fmt.Print("\033[?7l") // no wrap
+func (tru *Tru) printStatistic(prnt bool, next ...time.Time) {
+	var start time.Time
+	if len(next) == 0 {
+		start = time.Now()
+		if prnt {
+			var str string
+			str += "\033c"    // clear screen
+			str += "\033[s"   // save the cursor position
+			str += "\033[?7l" // no wrap
+			fmt.Print(str)
+		}
+	} else {
+		start = next[0] // get start time from parameter
+	}
 
-	// Print stat log list
-	var printLog = func(tableLen int) {
+	// getLog return log string
+	var getLog = func(tableLen int) (str string) {
 		_, h, err := tru.getTermSize()
 
 		from := 0
@@ -211,41 +310,46 @@ func (tru *Tru) PrintStatistic() {
 			}
 		}
 		for i := from; i < l; i++ {
-			msg := tru.statLogMsgs[i]
-			fmt.Println("\033[K" + msg)
+			str += "\033[K" + tru.statLogMsgs[i] + "\n"
 		}
+		return
 	}
 
-	// Print stat header, table and logs
-	var print = func() {
+	// getStat return string with stat header, table and logs
+	var getStat = func() (str string) {
 		table, numRows := tru.statToString(true)
-		fmt.Print("\033[?25l") // hide cursor
-		fmt.Print("\033[u")    // restore the cursor position
+		str += "\033[?25l" // hide cursor
+		str += "\033[u"    // restore the cursor position
 		// "\033[K" - clear line
-		fmt.Printf("\033[KTRU %s, RCH: %d, SCH: %d, run time: %v\n\033[K%s\n\033[K",
+		str += fmt.Sprintf("\033[KTRU %s, RCH: %d, SCH: %d, run time: %v\n\033[K%s\n\033[K",
 			tru.LocalAddr().String(),
 			len(tru.readerCh),
 			len(tru.senderCh),
 			time.Since(start),
 			table,
 		)
-		fmt.Println("\033[K")
-		printLog(numRows + 3)
+		str += "\033[K\n"
+		str += getLog(numRows + 3)
+		return
 	}
 
-	// Print statistic every 250 ms
-	printStat = func() {
-		tru.statTimer = time.AfterFunc(500*time.Millisecond, func() {
-			print()
-			printStat()
-		})
-	}
-
-	printStat()
+	// Print statistic every 500 ms
+	tru.mu.Lock()
+	defer tru.mu.Unlock()
+	tru.statTimer = time.AfterFunc(500*time.Millisecond, func() {
+		str := getStat()
+		if prnt {
+			fmt.Print(str)
+		}
+		tru.printStatistic(prnt, start) // print next frame
+	})
 }
 
 // StopPrintStatistic stop print statistic
 func (tru *Tru) StopPrintStatistic() {
+	tru.mu.Lock()
+	defer tru.mu.Unlock()
+
 	if tru.statTimer != nil {
 		tru.statTimer.Stop()
 		fmt.Print("\033[?25h") // show cursor

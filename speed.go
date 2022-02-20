@@ -6,7 +6,10 @@
 
 package tru
 
-import "time"
+import (
+	"sync"
+	"time"
+)
 
 const sumArrayLen = 10
 
@@ -16,6 +19,7 @@ type speed struct {
 	currentSum int
 	sumArray   [sumArrayLen]int
 	timer      *time.Timer
+	sync.RWMutex
 }
 
 // newSpeed create new packet speed calculator
@@ -25,6 +29,9 @@ func (s *speed) init() {
 
 // destroy packet speed calculator
 func (s *speed) destroy() {
+	s.Lock()
+	defer s.Unlock()
+
 	if s.timer != nil {
 		s.timer.Stop()
 	}
@@ -32,11 +39,17 @@ func (s *speed) destroy() {
 
 // get current speed
 func (s *speed) get() int {
+	s.RLock()
+	defer s.RUnlock()
+
 	return s.speed
 }
 
 // add packet to speed calculator
 func (s *speed) add(count ...bool) {
+	s.Lock()
+	defer s.Unlock()
+
 	now := time.Now()
 	unixNano := now.UnixNano()
 	umillisec := unixNano / 1000000
@@ -57,9 +70,12 @@ func (s *speed) add(count ...bool) {
 	}
 }
 
-// process executes 10 times per second to switch spped array when packets not
+// process executes 10 times per second to switch speed array when packets not
 // received
 func (s *speed) process() {
+	s.Lock()
+	defer s.Unlock()
+
 	s.timer = time.AfterFunc(100*time.Millisecond, func() {
 		s.add(false)
 		s.process()
