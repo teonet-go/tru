@@ -21,7 +21,7 @@ import (
 // Tru connector
 type Tru struct {
 	conn       net.PacketConn      // Local connection
-	cannels    map[string]*Channel // Channels map
+	channels   map[string]*Channel // Channels map
 	reader     ReaderFunc          // Global tru reader
 	readerCh   chan readerChData   // Reader channel
 	senderCh   chan senderChData   // Sender channel
@@ -44,13 +44,20 @@ var log *teolog.Teolog
 // Global flag "drop" drop send paskets for testing
 var drop = flag.Int("drop", 0, "drop send packets")
 
-// New create new tru object and start listen udp packets
-func New(port int, params ...interface{} /* reader ...ReaderFunc */) (tru *Tru, err error) {
+var ErrTruClosed = errors.New("tru listner closed")
+
+// New create new tru object and start listen udp packets. Parameters:
+//   port int: local port number, 0 for any;
+//   ReaderFunc: message receiver callback function;
+//   *teolog.Teolog: pointer to teolog
+//   teolog.TeologFilter: loggers filter
+func New(port int, params ...interface{}) (tru *Tru, err error) {
 
 	// Create tru object
 	tru = new(Tru)
 
 	// Parse parameters
+	var logfilter teolog.TeologFilter
 	for _, p := range params {
 		switch v := p.(type) {
 
@@ -64,6 +71,10 @@ func New(port int, params ...interface{} /* reader ...ReaderFunc */) (tru *Tru, 
 		case *teolog.Teolog:
 			log = v
 
+		// Teonet loggers filter
+		case teolog.TeologFilter:
+			logfilter = v
+
 		// Wrong parameter
 		default:
 			err = errors.New("wrong parameter")
@@ -71,14 +82,15 @@ func New(port int, params ...interface{} /* reader ...ReaderFunc */) (tru *Tru, 
 		}
 	}
 
-	// Log define
+	// Log define and set filter
 	if log == nil {
 		log = teolog.New()
 	}
+	log.SetFilter(logfilter)
 
 	// Init tru object
 	tru.listenStop = make(chan interface{})
-	tru.cannels = make(map[string]*Channel)
+	tru.channels = make(map[string]*Channel)
 	tru.connect.connects = make(map[string]*connectData)
 	tru.conn, err = net.ListenPacket("udp", ":"+strconv.Itoa(port))
 	if err != nil {
@@ -110,17 +122,18 @@ func New(port int, params ...interface{} /* reader ...ReaderFunc */) (tru *Tru, 
 	return
 }
 
-// Close close tru listner and all connected channels
+// Close tru listner and all connected channels
 func (tru *Tru) Close() {
-	tru.mu.RLock()
-	for _, ch := range tru.cannels {
-		tru.mu.RUnlock()
-		ch.Close()
-		tru.Close()
-		return
-	}
-	tru.mu.RUnlock()
 
+	// Send error message to channel reader
+	if tru.reader != nil {
+		tru.reader(nil, nil, ErrTruClosed)
+	}
+
+	// Close all channels
+	tru.getChannelEach(func(ch *Channel) { ch.Close() })
+
+	// Stop listner and statistic
 	tru.stopListen()
 	tru.StopPrintStatistic()
 	log.Connect.Println("tru closed")

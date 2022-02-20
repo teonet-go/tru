@@ -20,6 +20,7 @@ import (
 var port = flag.Int("p", 0, "local port number")
 var addr = flag.String("a", "", "remote address to connect to")
 var loglevel = flag.String("loglevel", "", "set log level")
+var logfilter = flag.String("logfilter", "", "set log filter")
 var stat = flag.Bool("stat", false, "print statistic")
 var delay = flag.Int("delay", 0, "send delay in Microseconds")
 var sendlen = flag.Int("sendlen", 0, "send packet data length")
@@ -38,8 +39,12 @@ func main() {
 	// Parse flags
 	flag.Parse()
 
-	// Init and Set log options
+	// Set log options and filter
+	var logFilter teolog.TeologFilter
 	log.SetLevel(*loglevel)
+	if *logfilter != "" {
+		logFilter = teolog.Logfilter(*logfilter)
+	}
 
 	// CPU profiller
 	if *cpuprofile != "" {
@@ -68,7 +73,7 @@ func main() {
 	}
 
 	// Create server connection and start listen incominng packets
-	tru, err := tru.New(*port, Reader, log)
+	tru, err := tru.New(*port, Reader, log, logFilter)
 	if err != nil {
 		log.Error.Fatal("can't create tru, err: ", err)
 	}
@@ -100,7 +105,11 @@ func main() {
 
 // Reader read packets from connected peers
 func Reader(ch *tru.Channel, pac *tru.Packet, err error) (processed bool) {
-	log.Debugvvv.Printf("got %d byte from %s, id %d: %s\n", pac.Len(), ch.Addr().String(), pac.ID(), pac.Data())
+	if err != nil {
+		log.Debug.Println("got error in main reader:", err)
+		return
+	}
+	log.Debugv.Printf("got %d byte from %s, id %d: %s\n", pac.Len(), ch.Addr().String(), pac.ID(), pac.Data())
 	ch.WriteTo(append([]byte("answer to "), pac.Data()...))
 	return
 }
@@ -112,13 +121,17 @@ func Sender(t *tru.Tru, addr string) {
 	}
 
 connect:
-	log.Debugvvv.Println("connect to peer", addr)
+	log.Debug.Println("connect to peer", addr)
 	ch, err := t.Connect(addr, func(ch *tru.Channel, pac *tru.Packet, err error) (processed bool) {
-		log.Debugvvv.Printf("got %d byte from %s, id %d: %s\n", pac.Len(), ch.Addr().String(), pac.ID(), pac.Data())
+		if err != nil {
+			log.Debug.Println("got error in channel reader, err:", err)
+			return
+		}
+		log.Debugv.Printf("got %d byte from %s, id %d: %s\n", pac.Len(), ch.Addr().String(), pac.ID(), pac.Data())
 		return true
 	})
 	if err != nil {
-		log.Debugvvv.Println(err)
+		log.Connect.Println(err)
 		time.Sleep(5 * time.Second)
 		goto connect
 	}
@@ -135,11 +148,11 @@ connect:
 
 		_, err := ch.WriteTo(data)
 		if err != nil {
-			log.Debugvvv.Println(err)
+			log.Connect.Println(err)
 			goto connect
 		}
-		log.Debugvvv.Printf("send %d bytes data to %s, data: %s\n", len(data), ch.Addr().String(), data)
+		log.Debugv.Printf("send %d bytes data to %s, data: %s\n", len(data), ch.Addr().String(), data)
 
-		// time.Sleep(time.Duration(*delay) * time.Microsecond)
+		time.Sleep(time.Duration(*delay) * time.Microsecond)
 	}
 }

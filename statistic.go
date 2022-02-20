@@ -225,7 +225,7 @@ func (tru *Tru) Statistic() (stat ChannelsStatistic) {
 	var i int
 	mu.Lock()
 	tru.mu.RLock()
-	for _, ch := range tru.cannels {
+	for _, ch := range tru.channels {
 		ch.stat.RLock()
 		stat = append(stat, ChannelStatistic{
 			Addr: ch.addr.String(),

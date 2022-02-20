@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"math/rand"
 	"net"
+	"reflect"
 	"time"
 )
 
@@ -30,6 +31,8 @@ type Channel struct {
 }
 
 // const MaxUint16 = ^uint16(0)
+
+var ErrChannelDestroyed = errors.New("channel destroyed")
 
 // NewChannel create new tru channel by address
 func (tru *Tru) newChannel(addr net.Addr, serverMode ...bool) (ch *Channel, err error) {
@@ -65,7 +68,7 @@ func (tru *Tru) newChannel(addr net.Addr, serverMode ...bool) (ch *Channel, err 
 		},
 	)
 	ch.stat.sendDelay = tru.sendDelay
-	tru.cannels[addr.String()] = ch
+	tru.channels[addr.String()] = ch
 	return
 }
 
@@ -74,8 +77,31 @@ func (tru *Tru) getChannel(addr string) (ch *Channel, ok bool) {
 	tru.mu.RLock()
 	defer tru.mu.RUnlock()
 
-	ch, ok = tru.cannels[addr]
+	ch, ok = tru.channels[addr]
 	return
+}
+
+// getChannelRandom get tru channel random
+func (tru *Tru) getChannelRandom() (ch *Channel) {
+	tru.mu.RLock()
+	defer tru.mu.RUnlock()
+
+	if len(tru.channels) == 0 {
+		return
+	}
+
+	keys := reflect.ValueOf(tru.channels).MapKeys()
+	randomIndex := rand.Intn(len(keys))
+	ch = tru.channels[keys[randomIndex].String()]
+
+	return
+}
+
+// getChannelEach get each channel in function f
+func (tru *Tru) getChannelEach(f func(ch *Channel)) {
+	for ch := tru.getChannelRandom(); ch != nil; ch = tru.getChannelRandom() {
+		f(ch)
+	}
 }
 
 // addToMsgsLog add message to log
@@ -94,12 +120,16 @@ func (ch *Channel) destroy(msg string) {
 	ch.tru.mu.Lock()
 	defer ch.tru.mu.Unlock()
 
+	if ch.reader != nil {
+		ch.reader(ch, nil, ErrChannelDestroyed)
+	}
+
 	log.Connect.Println(msg)
 
 	ch.sendQueue.destroy()
 	ch.stat.destroy()
 
-	delete(ch.tru.cannels, ch.addr.String())
+	delete(ch.tru.channels, ch.addr.String())
 	ch.tru.statMsgs.add(msg)
 }
 
@@ -129,7 +159,7 @@ func (ch *Channel) WriteTo(data []byte, delivery ...interface{}) (id int, err er
 // writeTo writes a packet with status and data to channel
 func (ch *Channel) writeTo(data []byte, stat int, delivery []interface{}, ids ...int) (id int, err error) {
 	if ch.stat.isDestroyed() {
-		err = errors.New("channel destroyed")
+		err = ErrChannelDestroyed
 		return
 	}
 
