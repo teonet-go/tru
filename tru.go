@@ -36,7 +36,10 @@ type Tru struct {
 }
 
 // Lengs of readerChData and senderChData
-const chanLen = 10
+const (
+	chanLen        = 10
+	startSendDelay = 500
+)
 
 // Teolog
 var log *teolog.Teolog
@@ -55,6 +58,7 @@ func New(port int, params ...interface{}) (tru *Tru, err error) {
 
 	// Create tru object
 	tru = new(Tru)
+	tru.sendDelay = startSendDelay
 
 	// Parse parameters
 	var logfilter teolog.TeologFilter

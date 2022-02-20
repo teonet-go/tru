@@ -81,7 +81,7 @@ func main() {
 	tru.SetMaxDataLen(*datalen)
 
 	// Set default send delay
-	tru.SetSendDelay(*delay)
+	// tru.SetSendDelay(*delay)
 
 	// Send packets if addr flag set
 	go Sender(tru, *addr)

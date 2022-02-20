@@ -238,10 +238,10 @@ func (ch *Channel) writeToDelay(status int) {
 	}
 
 	// Get current delay
-	delay := time.Duration(ch.stat.sendDelay) * time.Microsecond
 
 	// Claculate new delay
 	var chSendDelay = ch.stat.getSendDelay()
+	delay := time.Duration(chSendDelay) * time.Microsecond
 	if retransmitDelayCount == 0 {
 		switch {
 		case ch.stat.sendDelay > 100:
@@ -254,10 +254,10 @@ func (ch *Channel) writeToDelay(status int) {
 	}
 
 	// Set new delay
-	if time.Since(ch.stat.lastDelayCheck) > 50*time.Millisecond {
-		ch.stat.lastDelayCheck = time.Now()
-		ch.stat.setSendDelay(chSendDelay)
-	}
+	// if time.Since(ch.stat.lastDelayCheck) > 50*time.Millisecond {
+	ch.stat.lastDelayCheck = time.Now()
+	ch.stat.setSendDelay(chSendDelay)
+	// }
 
 	// Execute current delay
 	if since := time.Since(ch.stat.lastSend); since < delay {
