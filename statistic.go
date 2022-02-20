@@ -307,20 +307,15 @@ func (tru *Tru) PrintStatistic() {
 func (tru *Tru) printStatistic(prnt bool, next ...time.Time) {
 	var start time.Time
 	if len(next) == 0 {
-		start = time.Now()
-		if prnt {
-			var str string
-			str += "\033c"    // clear screen
-			str += "\033[s"   // save the cursor position
-			str += "\033[?7l" // no wrap
-			fmt.Print(str)
-		}
+		// First screen
+		start = time.Now() // set start time
 	} else {
+		// Next screens
 		start = next[0] // get start time from parameter
 	}
 
-	// getLog return log string
-	var getLog = func(tableLen int) (str string) {
+	// getLog return messages log: str - log in strung, n - number lines in log
+	var getLog = func(tableLen int) (str string, n int) {
 		_, h, err := tru.getTermSize()
 
 		from := 0
@@ -334,15 +329,22 @@ func (tru *Tru) printStatistic(prnt bool, next ...time.Time) {
 		for i := from; i < l; i++ {
 			str += "\033[K" + tru.statMsgs.get(i) + "\n"
 		}
+		n = l - from
 		return
 	}
 
 	// getStat return string with stat header, table and logs
 	var getStat = func() (str string) {
+
+		// Statistic to table in string
 		table, numRows := tru.statToString(true)
-		str += "\033[?25l" // hide cursor
-		str += "\033[u"    // restore the cursor position
-		// "\033[K" - clear line
+
+		// Header terminal commands
+		str += "\033[s"    // save the cursor position
+		str += "\033[1;1H" // set cursor position
+		str += "\033[?7l"  // no wrap
+
+		// Table and title
 		str += fmt.Sprintf("\033[KTRU %s, RCH: %d, SCH: %d, run time: %v\n\033[K%s\n\033[K",
 			tru.LocalAddr().String(),
 			len(tru.readerCh),
@@ -350,8 +352,18 @@ func (tru *Tru) printStatistic(prnt bool, next ...time.Time) {
 			time.Since(start),
 			table,
 		)
-		str += "\033[K\n"
-		str += getLog(numRows + 3)
+
+		// Log with main messages
+		msglog, n := getLog(numRows + 3) // get messages log
+		str += "\033[K\n"                // clear line
+		str += msglog                    // messages
+
+		// Footer terminal command
+		str += "\033[K\n"                              // clear line
+		str += fmt.Sprintf("\033[%d;r", numRows+3+n+1) // set scroll area
+		str += "\033[u"                                // restore the cursor position
+		str += "\033[?7h"                              // wrap
+
 		return
 	}
 
@@ -374,8 +386,8 @@ func (tru *Tru) StopPrintStatistic() {
 
 	if tru.statTimer != nil {
 		tru.statTimer.Stop()
-		fmt.Print("\033[?25h") // show cursor
-		fmt.Print("\033[?7h")  // wrap
+		fmt.Print("\033[r") // reset scroll area
+		fmt.Print("\033[u") // restore the cursor position
 	}
 }
 
