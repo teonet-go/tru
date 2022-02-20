@@ -31,7 +31,7 @@ type Tru struct {
 	statTimer  *time.Timer         // Show statistic timer
 	privateKey *rsa.PrivateKey     // Common private key
 	maxDataLen int                 // Max data len in created packets, 0 - maximum UDP len
-	closed     bool                // Tru closed flag
+	listenStop chan interface{}    // Tru listen wait stop channel
 	mu         sync.RWMutex        // Channels map mutex
 }
 
@@ -77,6 +77,7 @@ func New(port int, params ...interface{} /* reader ...ReaderFunc */) (tru *Tru, 
 	}
 
 	// Init tru object
+	tru.listenStop = make(chan interface{})
 	tru.cannels = make(map[string]*Channel)
 	tru.connect.connects = make(map[string]*connectData)
 	tru.conn, err = net.ListenPacket("udp", ":"+strconv.Itoa(port))
@@ -119,8 +120,8 @@ func (tru *Tru) Close() {
 		return
 	}
 	tru.mu.RUnlock()
-	tru.closed = true
-	tru.conn.Close()
+
+	tru.stopListen()
 	tru.StopPrintStatistic()
 	log.Connect.Println("tru closed")
 }
@@ -167,22 +168,38 @@ func (tru *Tru) writeTo(data []byte, addri interface{}) (err error) {
 
 // listen to incoming udp packets
 func (tru *Tru) listen() {
-	defer func() {
-		log.Connect.Println("stop listen", tru.LocalAddr().String())
-		tru.conn.Close()
-	}()
 	log.Connect.Println("start listen at", tru.LocalAddr().String())
+	defer log.Connect.Println("stop listen", tru.LocalAddr().String())
 
-	for !tru.closed {
-		buf := make([]byte, 64*1024)
-		n, addr, err := tru.conn.ReadFrom(buf)
-		if err != nil {
-			// log.Error.Println("ReadFrom error:", err)
-			continue
+	for {
+		select {
+
+		// Check channel closed to stop listen and return
+		case _, ok := <-tru.listenStop:
+			if !ok {
+				log.Debug.Println("listen wait channel closed")
+				return
+			}
+
+		// Read data from tru connect (from UDP port)
+		default:
+			buf := make([]byte, 64*1024)
+			n, addr, err := tru.conn.ReadFrom(buf)
+			if err != nil {
+				// log.Error.Println("ReadFrom error:", err)
+				break
+			}
+			if n > 0 {
+				tru.serve(n, addr, buf[:n])
+			}
 		}
-
-		tru.serve(n, addr, buf[:n])
 	}
+}
+
+// stopListen stop listen to incoming udp packets
+func (tru *Tru) stopListen() {
+	close(tru.listenStop) // close listen wait channel to stop listen
+	tru.conn.Close()
 }
 
 // serve received packet

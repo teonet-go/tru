@@ -107,6 +107,6 @@ func (l *Teolog) levelFromStr(level string) int {
 	case "debugvvv":
 		return Debugvvv
 	default:
-		return Debugvvv
+		return None
 	}
 }
