@@ -18,18 +18,18 @@ import (
 
 // Tru connector
 type Tru struct {
-	conn        net.PacketConn      // Local connection
-	cannels     map[string]*Channel // Channels map
-	reader      ReaderFunc          // Global tru reader
-	readerCh    chan readerChData   // Reader channel
-	senderCh    chan senderChData   // Sender channel
-	connect     connect             // Connect methods receiver
-	sendDelay   int                 // Common send delay
-	statLogMsgs []string            // Log messages
-	statTimer   *time.Timer         // Show statistic timer
-	privateKey  *rsa.PrivateKey     // Common private key
-	maxDataLen  int                 // Max data len in created packets, 0 - maximum UDP len
-	mu          sync.RWMutex        // Channels map mutex
+	conn       net.PacketConn      // Local connection
+	cannels    map[string]*Channel // Channels map
+	reader     ReaderFunc          // Global tru reader
+	readerCh   chan readerChData   // Reader channel
+	senderCh   chan senderChData   // Sender channel
+	connect    connect             // Connect methods receiver
+	sendDelay  int                 // Common send delay
+	statMsgs   statisticLog        // Statistic log messages
+	statTimer  *time.Timer         // Show statistic timer
+	privateKey *rsa.PrivateKey     // Common private key
+	maxDataLen int                 // Max data len in created packets, 0 - maximum UDP len
+	mu         sync.RWMutex        // Channels map mutex
 }
 
 const chanLen = 10

@@ -302,7 +302,7 @@ func (tru *Tru) printStatistic(prnt bool, next ...time.Time) {
 		_, h, err := tru.getTermSize()
 
 		from := 0
-		l := len(tru.statLogMsgs)
+		l := tru.statMsgs.len()
 		if err == nil {
 			from = l - (h - tableLen)
 			if from < 0 {
@@ -310,7 +310,7 @@ func (tru *Tru) printStatistic(prnt bool, next ...time.Time) {
 			}
 		}
 		for i := from; i < l; i++ {
-			str += "\033[K" + tru.statLogMsgs[i] + "\n"
+			str += "\033[K" + tru.statMsgs.get(i) + "\n"
 		}
 		return
 	}
