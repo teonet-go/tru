@@ -39,10 +39,6 @@ func main() {
 	flag.Parse()
 
 	// Init and Set log options
-	// log.Debugvvv.SetFlags(log.Debugvvv.LstdFlags | log.Debugvvv.Lshortfile | log.Debugvvv.Lmicroseconds)
-	// if *nolog {
-	// 	log.Debugvvv.SetOutput(ioutil.Discard)
-	// }
 	log.SetLevel(*loglevel)
 
 	// CPU profiller
