@@ -27,16 +27,17 @@ type Teolog struct {
 	level    int
 }
 
+// Log levels constant
 const (
-	None = iota
-	Error
-	User
-	Info
-	Connect
-	Debug
-	Debugv
-	Debugvv
-	Debugvvv
+	None     = iota // No logs
+	Error           // Errors log (show only errors)
+	User            // User level log (show User logs and Error logs)
+	Info            // Info level (show Info, User and Error logs)
+	Connect         // Connect level (show connect, Info, User and Error logs)
+	Debug           // Debug level (show debug, connect, Info, User and Error logs)
+	Debugv          // Debugv level (show debugv, debug, connect, Info, User and Error logs)
+	Debugvv         // Debugvv level (show debugvv, debugv, debug, connect, Info, User and Error logs)
+	Debugvvv        // Debugvvv level (show debugvvv, debugvv, debugv, debug, connect, Info, User and Error logs)
 )
 
 // New create new teolog
@@ -60,6 +61,7 @@ func New() (teolog *Teolog) {
 	return
 }
 
+// SetFlags sets the output flags for the logger.
 func (l *Teolog) SetFlags(flag int) {
 	for _, tl := range l.levels {
 		tl.SetFlags(flag | log.Lmsgprefix)
@@ -86,6 +88,7 @@ func (l *Teolog) SetLevel(leveli interface{}) {
 	}
 }
 
+// levelFromStr get level from string
 func (l *Teolog) levelFromStr(level string) int {
 	switch strings.ToLower(level) {
 	case "none":
