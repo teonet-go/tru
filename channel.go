@@ -104,13 +104,6 @@ func (tru *Tru) getChannelEach(f func(ch *Channel)) {
 	}
 }
 
-// addToMsgsLog add message to log
-// func (tru *Tru) addToMsgsLog(msg string) {
-// 	const layout = "2006-01-02 15:04:05.000000"
-// 	msg = fmt.Sprintf("%v %s", time.Now().Format(layout), msg)
-// 	tru.statMsgs = append(tru.statMsgs, msg)
-// }
-
 // destroy destroy channel
 func (ch *Channel) destroy(msg string) {
 	if ch == nil {
@@ -241,6 +234,7 @@ func (ch *Channel) writeToDelay(status int) {
 	var retransmitDelayCount = 0
 	for rta := ch.sendQueue.getRetransmitAttempts(); rta > 0 && retransmitDelayCount < 10; retransmitDelayCount++ {
 		time.Sleep(10000 * time.Microsecond) // 10 ms sleet if retransmit attempt set now
+		rta = ch.sendQueue.getRetransmitAttempts()
 	}
 
 	// Get current delay
