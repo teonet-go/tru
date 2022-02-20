@@ -79,13 +79,6 @@ func (tru *Tru) getChannel(addr string) (ch *Channel, ok bool) {
 	return
 }
 
-// addToMsgsLog add message to log
-// func (tru *Tru) addToMsgsLog(msg string) {
-// 	const layout = "2006-01-02 15:04:05.000000"
-// 	msg = fmt.Sprintf("%v %s", time.Now().Format(layout), msg)
-// 	tru.statMsgs = append(tru.statMsgs, msg)
-// }
-
 // destroy destroy channel
 func (ch *Channel) destroy(msg string) {
 	if ch == nil {
