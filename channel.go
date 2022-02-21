@@ -303,7 +303,11 @@ func (ch *Channel) newID() (id int) {
 	defer ch.tru.mu.Unlock()
 
 	id = int(ch.id)
+
 	ch.id++
+	if ch.id >= packetIDLimit {
+		ch.id = 0
+	}
 
 	return
 }
@@ -314,6 +318,10 @@ func (ch *Channel) newExpectedID() (id int) {
 	defer ch.tru.mu.Unlock()
 
 	ch.expectedID++
+	if ch.expectedID >= packetIDLimit {
+		ch.expectedID = 0
+	}
+
 	id = int(ch.expectedID)
 
 	return

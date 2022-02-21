@@ -38,7 +38,7 @@ type Tru struct {
 // Lengs of readerChData and senderChData
 const (
 	chanLen        = 10
-	startSendDelay = 250
+	startSendDelay = 15 // 250
 )
 
 // Teolog

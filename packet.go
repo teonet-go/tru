@@ -50,6 +50,7 @@ const (
 	cryptAesLength   = 28    // Ees crypt add to max len packet
 )
 
+const packetIDLimit = 0x100000          // Number of packets id (max number + 1)
 const DeliveryTimeout = 5 * time.Second // Default delivery function timeout
 
 // newPacket create new empty packet
@@ -180,19 +181,17 @@ func (p *Packet) distance(expectedID uint32, id uint32) int {
 		return 0
 	}
 
-	// Number of packets id
-	const packetIDlimit = 0x100000000
 	// modSubU module of subtraction
 	modSubU := func(arga, argb uint32, mod uint64) int {
 		sub := (uint64(arga) % mod) + mod - (uint64(argb) % mod)
 		return int(sub % mod)
 	}
 
-	diff := modSubU(id, expectedID, packetIDlimit)
-	if diff < packetIDlimit/2 {
+	diff := modSubU(id, expectedID, packetIDLimit)
+	if diff < packetIDLimit/2 {
 		return int(diff)
 	}
-	return int(diff - packetIDlimit)
+	return int(diff - packetIDLimit)
 }
 
 // getRetransmitAttempts return retransmit attempts value. This function
