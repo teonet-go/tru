@@ -18,8 +18,8 @@ import (
 type Channel struct {
 	addr       net.Addr      // Peer address
 	serverMode bool          // Server mode if true
-	id         uint16        // Next send ID
-	expectedID uint16        // Next expected ID
+	id         uint32        // Next send ID
+	expectedID uint32        // Next expected ID
 	reader     ReaderFunc    // Channels reader
 	stat       statistic     // Statictic struct and receiver
 	sendQueue  sendQueue     // Send queue
@@ -67,7 +67,9 @@ func (tru *Tru) newChannel(addr net.Addr, serverMode ...bool) (ch *Channel, err 
 			ch.writeToPing()
 		},
 	)
-	ch.stat.sendDelay = tru.sendDelay
+	if !ch.serverMode {
+		ch.stat.sendDelay = tru.sendDelay
+	}
 	tru.channels[addr.String()] = ch
 	return
 }
@@ -230,34 +232,35 @@ func (ch *Channel) writeToDelay(status int) {
 		return
 	}
 
-	// Wait up to 100 ms if fist packet has retransmit attempt
+	// Sleep up to 300 microseconds while fist packet has retransmit attempt
 	var retransmitDelayCount = 0
-	for rta := ch.sendQueue.getRetransmitAttempts(); rta > 0 && retransmitDelayCount < 10; retransmitDelayCount++ {
-		time.Sleep(10000 * time.Microsecond) // 10 ms sleet if retransmit attempt set now
+	const minSendDelay = 15
+	for rta := ch.sendQueue.getRetransmitAttempts(); rta > 0 && retransmitDelayCount < 20; retransmitDelayCount++ {
+		time.Sleep(minSendDelay * time.Microsecond)
 		rta = ch.sendQueue.getRetransmitAttempts()
 	}
 
 	// Get current delay
-
-	// Claculate new delay
 	var chSendDelay = ch.stat.getSendDelay()
 	delay := time.Duration(chSendDelay) * time.Microsecond
-	if retransmitDelayCount == 0 {
-		switch {
-		case ch.stat.sendDelay > 100:
-			chSendDelay -= 10
-		case ch.stat.sendDelay > 30:
-			chSendDelay -= 1
-		}
-	} else {
-		chSendDelay += 10
-	}
+	if time.Since(ch.stat.lastDelayCheck) > 30*time.Millisecond {
 
-	// Set new delay
-	// if time.Since(ch.stat.lastDelayCheck) > 50*time.Millisecond {
-	ch.stat.lastDelayCheck = time.Now()
-	ch.stat.setSendDelay(chSendDelay)
-	// }
+		// Claculate new delay
+		if retransmitDelayCount == 0 {
+			switch {
+			case ch.stat.sendDelay > 100:
+				chSendDelay -= 10
+			case ch.stat.sendDelay > minSendDelay:
+				chSendDelay -= 1
+			}
+		} else {
+			chSendDelay += 10
+		}
+
+		// Set new delay
+		ch.stat.lastDelayCheck = time.Now()
+		ch.stat.setSendDelay(chSendDelay)
+	}
 
 	// Execute current delay
 	if since := time.Since(ch.stat.lastSend); since < delay {
@@ -300,7 +303,11 @@ func (ch *Channel) newID() (id int) {
 	defer ch.tru.mu.Unlock()
 
 	id = int(ch.id)
+
 	ch.id++
+	if ch.id >= packetIDLimit {
+		ch.id = 0
+	}
 
 	return
 }
@@ -311,6 +318,10 @@ func (ch *Channel) newExpectedID() (id int) {
 	defer ch.tru.mu.Unlock()
 
 	ch.expectedID++
+	if ch.expectedID >= packetIDLimit {
+		ch.expectedID = 0
+	}
+
 	id = int(ch.expectedID)
 
 	return

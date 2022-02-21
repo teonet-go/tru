@@ -15,7 +15,7 @@ import (
 )
 
 type Packet struct {
-	id                 uint16             // Packet ID
+	id                 uint32             // Packet ID
 	status             uint8              // Packet Type
 	data               []byte             // Packet Data
 	time               time.Time          // Packet creating time
@@ -50,6 +50,7 @@ const (
 	cryptAesLength   = 28    // Ees crypt add to max len packet
 )
 
+const packetIDLimit = 0x100000          // Number of packets id (max number + 1)
 const DeliveryTimeout = 5 * time.Second // Default delivery function timeout
 
 // newPacket create new empty packet
@@ -58,12 +59,22 @@ func (tru *Tru) newPacket() *Packet {
 }
 
 // MarshalBinary marshal packet
+//
+//   Bynary packet structure:
+//   +--------------------+------+
+//   | ID & STATUS uint32 | DATA |
+//   +--------------------+------+
+//   ID & STATUS uint32: STATUS 1 byte | ID 3 byte
+//
 func (p *Packet) MarshalBinary() (out []byte, err error) {
 	buf := new(bytes.Buffer)
 	le := binary.LittleEndian
 
-	binary.Write(buf, le, p.id)
-	binary.Write(buf, le, p.status)
+	// Pack status & id
+	statid := p.packStatID()
+
+	// Write status&id and data to buffer
+	binary.Write(buf, le, statid)
 	binary.Write(buf, le, p.data)
 
 	out = buf.Bytes()
@@ -76,21 +87,40 @@ func (p *Packet) UnmarshalBinary(data []byte) (err error) {
 	buf := bytes.NewReader(data)
 	le := binary.LittleEndian
 
-	binary.Read(buf, le, &p.id)
-	binary.Read(buf, le, &p.status)
+	// Read status&id from buffer and unpack it to p.status and p.id
+	var statid uint32
+	err = binary.Read(buf, le, &statid)
+	if err != nil {
+		return
+	}
+	p.unpackStatID(statid)
 
-	p.data = make([]byte, buf.Len())
-	binary.Read(buf, le, &p.data)
+	// Read data from buffer
+	if l := buf.Len(); l > 0 {
+		p.data = make([]byte, l)
+		err = binary.Read(buf, le, &p.data)
+	}
 
 	return
+}
+
+// packStatID pack status and id from packet
+func (p *Packet) packStatID() uint32 {
+	return p.id&(packetIDLimit-1) | uint32(p.status)<<24
+}
+
+// unpackStatID unpack status and id
+func (p *Packet) unpackStatID(statid uint32) {
+	p.id = statid & (packetIDLimit - 1)
+	p.status = uint8(statid >> 24)
 }
 
 // HeaderLen get header length
 func (p *Packet) HeaderLen() int {
 	// Tru header:
-	// id 		- 2 byte
+	// id 		- 3 byte
 	// status	- 1 byte
-	return 3
+	return 4
 }
 
 // Len get packet length
@@ -122,7 +152,7 @@ func (p *Packet) ID() int {
 
 // SetID set packet id
 func (p *Packet) SetID(id int) *Packet {
-	p.id = uint16(id)
+	p.id = uint32(id)
 	return p
 }
 
@@ -168,24 +198,22 @@ func (p *Packet) SetDeliveryTimeout(timeout time.Duration) *Packet {
 // distance check received packet distance and return integer value
 // lesse than zero than 'id < expectedID' or return integer value more than
 // zero than 'id > tcd.expectedID'
-func (p *Packet) distance(expectedID uint16, id uint16) int {
+func (p *Packet) distance(expectedID uint32, id uint32) int {
 	if expectedID == id {
 		return 0
 	}
 
-	// Number of packets id
-	const packetIDlimit = 0x10000
 	// modSubU module of subtraction
-	modSubU := func(arga, argb uint16, mod uint32) int32 {
-		sub := (uint32(arga) % mod) + mod - (uint32(argb) % mod)
-		return int32(sub % mod)
+	modSubU := func(arga, argb uint32, mod uint64) int {
+		sub := (uint64(arga) % mod) + mod - (uint64(argb) % mod)
+		return int(sub % mod)
 	}
 
-	diff := modSubU(id, expectedID, packetIDlimit)
-	if diff < packetIDlimit/2 {
+	diff := modSubU(id, expectedID, packetIDLimit)
+	if diff < packetIDLimit/2 {
 		return int(diff)
 	}
-	return int(diff - packetIDlimit)
+	return int(diff - packetIDLimit)
 }
 
 // getRetransmitAttempts return retransmit attempts value. This function

@@ -15,7 +15,7 @@ import (
 
 type sendQueue struct {
 	queue           list.List                // Send queue list
-	index           map[uint16]*list.Element // Send queue index
+	index           map[uint32]*list.Element // Send queue index
 	sync.RWMutex                             // Send queue mutex
 	retransmitTimer *time.Timer              // Send queue retransmit Timer
 }
@@ -29,7 +29,7 @@ const (
 
 // init send queue
 func (s *sendQueue) init(ch *Channel) {
-	s.index = make(map[uint16]*list.Element)
+	s.index = make(map[uint32]*list.Element)
 	s.retransmit(ch)
 }
 
@@ -45,7 +45,7 @@ func (s *sendQueue) add(pac *Packet) {
 	s.Lock()
 	defer s.Unlock()
 
-	id := uint16(pac.ID())
+	id := uint32(pac.ID())
 	s.index[id] = s.queue.PushBack(pac)
 	log.Debugvvv.Println("add to send queue", pac.ID())
 }
@@ -58,7 +58,7 @@ func (s *sendQueue) delete(id int) (pac *Packet, ok bool) {
 	e, pac, ok := s.get(id, true) // unsafe get (does not lock)
 	if ok {
 		s.queue.Remove(e)
-		delete(s.index, uint16(id))
+		delete(s.index, uint32(id))
 		log.Debugvvv.Println("delete from send queue", pac.ID())
 	}
 	return
@@ -71,7 +71,7 @@ func (s *sendQueue) get(id int, unsafe ...bool) (e *list.Element, pac *Packet, o
 		defer s.RUnlock()
 	}
 
-	e, ok = s.index[uint16(id)]
+	e, ok = s.index[uint32(id)]
 	if ok {
 		pac = e.Value.(*Packet)
 	}
@@ -127,7 +127,8 @@ func (s *sendQueue) retransmit(ch *Channel) {
 			// Check retransmit time
 			pac := e.Value.(*Packet)
 			if !pac.getRetransmitTime().Before(time.Now()) {
-				break
+				// break
+				continue
 			}
 
 			// Resend packet and set new retransmitTime

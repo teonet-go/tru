@@ -38,7 +38,7 @@ type Tru struct {
 // Lengs of readerChData and senderChData
 const (
 	chanLen        = 10
-	startSendDelay = 500
+	startSendDelay = 15 // 250
 )
 
 // Teolog
@@ -227,7 +227,7 @@ func (tru *Tru) serve(n int, addr net.Addr, data []byte) {
 	err := pac.UnmarshalBinary(data)
 	if err != nil {
 		// Wrong packet received from addr
-		log.Debugvvv.Printf("got wrong packet %d from %s, data: %s\n", n, addr.String(), data)
+		log.Error.Printf("got wrong packet %d from %s, data: %s\n", n, addr.String(), data)
 		return
 	}
 
@@ -301,14 +301,16 @@ func (tru *Tru) serve(n int, addr net.Addr, data []byte) {
 		case dist == 0:
 			// Send packet to reader process and process receive queue
 			sendToReader := func(ch *Channel, pac *Packet) {
+				ch.newExpectedID()
 				pac = ch.combine.packet(pac)
-				if pac != nil {
-					tru.readerCh <- readerChData{ch, pac, nil}
-					ch.stat.setRecv()
+				if pac == nil {
+					return
 				}
+				tru.readerCh <- readerChData{ch, pac, nil}
+				ch.stat.setRecv()
 			}
 			sendToReader(ch, pac)
-			ch.newExpectedID()
+			// ch.newExpectedID()
 
 			ch.recvQueue.process(ch, sendToReader)
 		}
