@@ -59,12 +59,22 @@ func (tru *Tru) newPacket() *Packet {
 }
 
 // MarshalBinary marshal packet
+//
+//   Bynary packet structure:
+//   +--------------------+------+
+//   | ID & STATUS uint32 | DATA |
+//   +--------------------+------+
+//   ID & STATUS uint32: STATUS 1 byte | ID 3 byte
+//
 func (p *Packet) MarshalBinary() (out []byte, err error) {
 	buf := new(bytes.Buffer)
 	le := binary.LittleEndian
 
-	binary.Write(buf, le, p.id)
-	binary.Write(buf, le, p.status)
+	// Pack status & id
+	statid := p.packStatID()
+
+	// Write status&id and data to buffer
+	binary.Write(buf, le, statid)
 	binary.Write(buf, le, p.data)
 
 	out = buf.Bytes()
@@ -77,14 +87,15 @@ func (p *Packet) UnmarshalBinary(data []byte) (err error) {
 	buf := bytes.NewReader(data)
 	le := binary.LittleEndian
 
-	err = binary.Read(buf, le, &p.id)
+	// Read status&id from buffer and unpack it to p.status and p.id
+	var statid uint32
+	err = binary.Read(buf, le, &statid)
 	if err != nil {
 		return
 	}
-	err = binary.Read(buf, le, &p.status)
-	if err != nil {
-		return
-	}
+	p.unpackStatID(statid)
+
+	// Read data from buffer
 	if l := buf.Len(); l > 0 {
 		p.data = make([]byte, l)
 		err = binary.Read(buf, le, &p.data)
@@ -93,12 +104,23 @@ func (p *Packet) UnmarshalBinary(data []byte) (err error) {
 	return
 }
 
+// packStatID pack status and id from packet
+func (p *Packet) packStatID() uint32 {
+	return p.id&(packetIDLimit-1) | uint32(p.status)<<24
+}
+
+// unpackStatID unpack status and id
+func (p *Packet) unpackStatID(statid uint32) {
+	p.id = statid & (packetIDLimit - 1)
+	p.status = uint8(statid >> 24)
+}
+
 // HeaderLen get header length
 func (p *Packet) HeaderLen() int {
 	// Tru header:
-	// id 		- 4 byte
+	// id 		- 3 byte
 	// status	- 1 byte
-	return 5
+	return 4
 }
 
 // Len get packet length
