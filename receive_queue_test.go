@@ -9,7 +9,7 @@ import (
 func TestReceiveQueue(t *testing.T) {
 
 	log := teolog.New()
-	// log.SetLevel(teolog.Connect)
+	log.SetLevel(teolog.Connect)
 	log.Info.Println("\n\n==== TestReceiveQueue started ====")
 
 	// create tru1
@@ -55,7 +55,10 @@ func TestReceiveQueue(t *testing.T) {
 
 	// Set expexted id, process queue and wait queue empty
 	ch.expectedID = 1
-	ch.recvQueue.process(ch, func(ch *Channel, pac *Packet) {})
+	ch.recvQueue.process(ch, func(ch *Channel, pac *Packet) {
+		log.Info.Println("got packet id", pac.ID())
+		ch.newExpectedID()
+	})
 	if ch.recvQueue.len() != 0 {
 		t.Errorf("queue not empty, len = %d", ch.recvQueue.len())
 		return

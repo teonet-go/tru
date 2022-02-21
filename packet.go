@@ -15,7 +15,7 @@ import (
 )
 
 type Packet struct {
-	id                 uint16             // Packet ID
+	id                 uint32             // Packet ID
 	status             uint8              // Packet Type
 	data               []byte             // Packet Data
 	time               time.Time          // Packet creating time
@@ -76,11 +76,18 @@ func (p *Packet) UnmarshalBinary(data []byte) (err error) {
 	buf := bytes.NewReader(data)
 	le := binary.LittleEndian
 
-	binary.Read(buf, le, &p.id)
-	binary.Read(buf, le, &p.status)
-
-	p.data = make([]byte, buf.Len())
-	binary.Read(buf, le, &p.data)
+	err = binary.Read(buf, le, &p.id)
+	if err != nil {
+		return
+	}
+	err = binary.Read(buf, le, &p.status)
+	if err != nil {
+		return
+	}
+	if l := buf.Len(); l > 0 {
+		p.data = make([]byte, l)
+		err = binary.Read(buf, le, &p.data)
+	}
 
 	return
 }
@@ -88,9 +95,9 @@ func (p *Packet) UnmarshalBinary(data []byte) (err error) {
 // HeaderLen get header length
 func (p *Packet) HeaderLen() int {
 	// Tru header:
-	// id 		- 2 byte
+	// id 		- 4 byte
 	// status	- 1 byte
-	return 3
+	return 5
 }
 
 // Len get packet length
@@ -122,7 +129,7 @@ func (p *Packet) ID() int {
 
 // SetID set packet id
 func (p *Packet) SetID(id int) *Packet {
-	p.id = uint16(id)
+	p.id = uint32(id)
 	return p
 }
 
@@ -168,17 +175,17 @@ func (p *Packet) SetDeliveryTimeout(timeout time.Duration) *Packet {
 // distance check received packet distance and return integer value
 // lesse than zero than 'id < expectedID' or return integer value more than
 // zero than 'id > tcd.expectedID'
-func (p *Packet) distance(expectedID uint16, id uint16) int {
+func (p *Packet) distance(expectedID uint32, id uint32) int {
 	if expectedID == id {
 		return 0
 	}
 
 	// Number of packets id
-	const packetIDlimit = 0x10000
+	const packetIDlimit = 0x100000000
 	// modSubU module of subtraction
-	modSubU := func(arga, argb uint16, mod uint32) int32 {
-		sub := (uint32(arga) % mod) + mod - (uint32(argb) % mod)
-		return int32(sub % mod)
+	modSubU := func(arga, argb uint32, mod uint64) int {
+		sub := (uint64(arga) % mod) + mod - (uint64(argb) % mod)
+		return int(sub % mod)
 	}
 
 	diff := modSubU(id, expectedID, packetIDlimit)

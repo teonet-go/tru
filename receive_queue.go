@@ -9,13 +9,13 @@ package tru
 import "sync"
 
 type receiveQueue struct {
-	ma           map[uint16]*Packet // Receive queue map
+	ma           map[uint32]*Packet // Receive queue map
 	sync.RWMutex                    // Receive queue mutex
 }
 
 // init receive queue
 func (r *receiveQueue) init(ch *Channel) {
-	r.ma = make(map[uint16]*Packet)
+	r.ma = make(map[uint32]*Packet)
 }
 
 // add packet to receive queue
@@ -23,7 +23,7 @@ func (r *receiveQueue) add(pac *Packet) {
 	r.Lock()
 	defer r.Unlock()
 
-	id := uint16(pac.ID())
+	id := uint32(pac.ID())
 	r.ma[id] = pac
 }
 
@@ -34,7 +34,7 @@ func (r *receiveQueue) delete(id int) (pac *Packet, ok bool) {
 
 	pac, ok = r.get(id, false)
 	if ok {
-		delete(r.ma, uint16(id))
+		delete(r.ma, uint32(id))
 	}
 	return
 }
@@ -46,7 +46,7 @@ func (r *receiveQueue) get(id int, lock ...bool) (pac *Packet, ok bool) {
 		defer r.RUnlock()
 	}
 
-	pac, ok = r.ma[uint16(id)]
+	pac, ok = r.ma[uint32(id)]
 	return
 }
 
@@ -67,7 +67,7 @@ func (r *receiveQueue) process(ch *Channel, send func(ch *Channel, pac *Packet))
 		return
 	}
 	send(ch, pac)
-	ch.newExpectedID()
+	// ch.newExpectedID()
 	ch.recvQueue.delete(id)
 
 	return r.process(ch, send)

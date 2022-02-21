@@ -59,7 +59,7 @@ func TestSplitPacket(t *testing.T) {
 		t.Errorf("can't connect to tru1, err: %s", err)
 		return
 	}
-	defer tru2.Close()
+	defer ch.Close()
 
 	// pac := tru2.newPacket()
 	var data = make([]byte, 0.5*1024*1024 /* pac.MaxDataLen()*33 */)
