@@ -232,10 +232,11 @@ func (ch *Channel) writeToDelay(status int) {
 		return
 	}
 
-	// Wait up to 100 ms if fist packet has retransmit attempt
+	// Sleep up to 300 microseconds while fist packet has retransmit attempt
 	var retransmitDelayCount = 0
-	for rta := ch.sendQueue.getRetransmitAttempts(); rta > 0 && retransmitDelayCount < 10; retransmitDelayCount++ {
-		time.Sleep(10000 * time.Microsecond) // 10 ms sleet if retransmit attempt set now
+	const minSendDelay = 15
+	for rta := ch.sendQueue.getRetransmitAttempts(); rta > 0 && retransmitDelayCount < 20; retransmitDelayCount++ {
+		time.Sleep(minSendDelay * time.Microsecond)
 		rta = ch.sendQueue.getRetransmitAttempts()
 	}
 
@@ -249,7 +250,7 @@ func (ch *Channel) writeToDelay(status int) {
 			switch {
 			case ch.stat.sendDelay > 100:
 				chSendDelay -= 10
-			case ch.stat.sendDelay > 15:
+			case ch.stat.sendDelay > minSendDelay:
 				chSendDelay -= 1
 			}
 		} else {
