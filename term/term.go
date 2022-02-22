@@ -1,0 +1,141 @@
+// Copyright 2022 Kirill Scherba <kirill@scherba.ru>. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+// Package term provides support functions for dealing with terminals, as
+// commonly found on UNIX systems.
+//
+// Function getch is the most common requirement:
+//
+// 	fmt.Println("Press any key to continue...")
+// 	term.Getch()
+//
+// Note that on non-Unix systems os.Stdin.Fd() may not be 0 and Getch() may run
+// incorrectly
+package term
+
+import (
+	"fmt"
+	"os"
+
+	"golang.org/x/term"
+)
+
+// Getch waits terminal key pressed and return it code
+func Getch() []byte {
+
+	oldState, err := term.MakeRaw(int(os.Stdin.Fd()))
+	if err != nil {
+		panic(err)
+	}
+	defer term.Restore(int(os.Stdin.Fd()), oldState)
+
+	t := os.NewFile(os.Stdin.Fd(), "teoterm")
+	bytes := make([]byte, 3)
+	numRead, err := t.Read(bytes)
+	if err != nil {
+		return nil
+	}
+
+	return bytes[0:numRead]
+}
+
+// Anykey waits until a key is pressed
+func Anykey() { Getch() }
+
+// GetSize returns the visible dimensions of the given terminal.
+// These dimensions don't include any scrollback buffer height.
+func GetSize(fd int) (width, height int, err error) {
+	return term.GetSize(fd)
+}
+
+// ColorFuncs contains functions which retun escape sequences of terminal colors
+// that can be written to the terminal in order to achieve different ColorFuncs
+// styles of text.
+type ColorFuncs struct {
+}
+
+// Color contains functions which retun escape sequences of terminal colors that
+// can be written to the terminal in order to achieve different ColorFuncs
+// styles of text.
+var Color ColorFuncs
+
+// None return escape sequences of Clear terminal color
+func (c ColorFuncs) None() string { return "\033[0m" }
+
+// Black return escape sequences of terminal Black color
+func (c ColorFuncs) Black() string { return "\033[22;30m" }
+
+// Red return escape sequences of terminal Red color
+func (c ColorFuncs) Red() string { return "\033[22;31m" }
+
+// Green return escape sequences of terminal Green color
+func (c ColorFuncs) Green() string { return "\033[22;32m" }
+
+// Brown return escape sequences of terminal Brown color
+func (c ColorFuncs) Brown() string { return "\033[22;33m" }
+
+// Blue return escape sequences of terminal Blue color
+func (c ColorFuncs) Blue() string { return "\033[22;34m" }
+
+// Magenta return escape sequences of terminal Magenta color
+func (c ColorFuncs) Magenta() string { return "\033[22;35m" }
+
+// Cyan return escape sequences of terminal Cyan color
+func (c ColorFuncs) Cyan() string { return "\033[22;36m" }
+
+// Grey return escape sequences of terminal Grey color
+func (c ColorFuncs) Grey() string { return "\033[22;37m" }
+
+// DarkGrey return escape sequences of terminal DarkGrey color
+func (c ColorFuncs) DarkGrey() string { return "\033[01;30m" }
+
+// LightRed return escape sequences of terminal LightRed color
+func (c ColorFuncs) LightRed() string { return "\033[01;31m" }
+
+// LightGreen return escape sequences of terminal LightGreen color
+func (c ColorFuncs) LightGreen() string { return "\033[01;32m" }
+
+// Yellow return escape sequences of terminal Yellow color
+func (c ColorFuncs) Yellow() string { return "\033[01;33m" }
+
+// LightBlue return escape sequences of terminal LightBlue color
+func (c ColorFuncs) LightBlue() string { return "\033[01;34m" }
+
+// LightMagenta return escape sequences of terminal LightMagenta color
+func (c ColorFuncs) LightMagenta() string { return "\033[01;35m" }
+
+// LightCyan return escape sequences of terminal LightCyan color
+func (c ColorFuncs) LightCyan() string { return "\033[01;36m" }
+
+// White return escape sequences of terminal White color
+func (c ColorFuncs) White() string { return "\033[01;37m" }
+
+// SetColor add selectet color escape sequences to text string and return it
+func SetColor(color string, txt string) string { return color + txt + Color.None() }
+
+// FuncFuncs contains escape sequences of terminal functions that can be written to
+// the terminal in order to execute it
+type FuncFuncs struct {
+}
+
+// Func contains functions which retun escape sequences of terminal functions
+// that can be written to the terminal in order to execute it
+var Func FuncFuncs
+
+// Clear return 'clear terminal screen' escape sequences that can be written to
+// the terminal in order to clear terminal screen
+func (f FuncFuncs) Clear() string { return "\033[2J" }
+
+// SetCursorPosition return 'set cursor position' terminal escape sequences
+// that can be written to the terminal in order to set terminal cursor
+// position
+func (f FuncFuncs) SetCursorPosition(x, y int) string { return fmt.Sprintf("\033[%d;%df", y, x) }
+
+// HideCursor return 'hide cursor' terminal escape sequences that can be
+// written to the terminal in order to hide terminal cursor
+func (f FuncFuncs) HideCursor() string { return "\033[?25l" }
+
+// ShowCursor return 'show cursor' terminal escape sequences that can be
+// written to the terminal in order to show terminal cursor (which was hide)
+func (f FuncFuncs) ShowCursor() string { return "\033[?25h" }
