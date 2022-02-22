@@ -5,7 +5,7 @@
 // Package term provides support functions for dealing with terminals, as
 // commonly found on UNIX systems.
 //
-// Function getch is the most common requirement:
+// Function Getch is the most common requirement:
 //
 // 	fmt.Println("Press any key to continue...")
 // 	term.Getch()
@@ -173,3 +173,26 @@ func (f FuncFuncs) SetScrollRegion(startRow int, numRows ...int) string {
 // ResetScrollRegion return 'reset scroll region' terminal escape sequences that
 // can be written to the terminal in order to reset scroll region
 func (f FuncFuncs) ResetScrollRegion() string { return "\033[r" }
+
+// KeysFuncs contains escape sequences of terminal functions that can be written to
+// the terminal in order to execute it
+type KeysFuncs struct {
+}
+
+// Keys contains functions which retun key codes returned by Getch function
+var Keys KeysFuncs
+
+// CtrlC return Ctrl+C key code
+func (k KeysFuncs) CtrlC() []byte {
+	return []byte{3}
+}
+
+// CtrlD return Ctrl+D key code
+func (k KeysFuncs) CtrlD() []byte {
+	return []byte{4}
+}
+
+// Left return arrow left key code
+func (k KeysFuncs) Left() []byte {
+	return []byte{27, 91, 68}
+}
