@@ -127,6 +127,23 @@ var Func FuncFuncs
 // the terminal in order to clear terminal screen
 func (f FuncFuncs) Clear() string { return "\033[2J" }
 
+// WrapOn return 'wrap lines mode' escape sequences that can be written to
+// the terminal in order to set wrap terminals lines mode
+func (f FuncFuncs) WrapOn() string { return "\033[?7h" }
+
+// WrapOff return 'no wrap lines mode' escape sequences that can be written to
+// the terminal in order to set no wrap terminals lines mode
+func (f FuncFuncs) WrapOff() string { return "\033[?7l" }
+
+// SaveCursorPosition return 'save cursor position' terminal escape sequences
+// that can be written to the terminal in order to save cursor position
+func (f FuncFuncs) SaveCursorPosition() string { return "\033[s" }
+
+// RestoreCursorPosition return 'restore cursor position' terminal escape
+// sequences that can be written to the terminal in order to restore cursor
+// position
+func (f FuncFuncs) RestoreCursorPosition() string { return "\033[u" }
+
 // SetCursorPosition return 'set cursor position' terminal escape sequences
 // that can be written to the terminal in order to set terminal cursor
 // position
@@ -139,3 +156,20 @@ func (f FuncFuncs) HideCursor() string { return "\033[?25l" }
 // ShowCursor return 'show cursor' terminal escape sequences that can be
 // written to the terminal in order to show terminal cursor (which was hide)
 func (f FuncFuncs) ShowCursor() string { return "\033[?25h" }
+
+// ClearLine return 'clear line' terminal escape sequences that can be
+// written to the terminal in order to clear line
+func (f FuncFuncs) ClearLine() string { return "\033[K" }
+
+// SetScrollRegion return 'set scroll region' terminal escape sequences that
+// can be written to the terminal in order to set scroll region
+func (f FuncFuncs) SetScrollRegion(startRow int, numRows ...int) string {
+	if len(numRows) == 0 || numRows[0] == 0 {
+		return fmt.Sprintf("\033[%d;r", startRow)
+	}
+	return fmt.Sprintf("\033[%d;%dr", startRow, numRows[0])
+}
+
+// ResetScrollRegion return 'reset scroll region' terminal escape sequences that
+// can be written to the terminal in order to reset scroll region
+func (f FuncFuncs) ResetScrollRegion() string { return "\033[r" }

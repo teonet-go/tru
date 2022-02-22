@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"github.com/kirill-scherba/stable"
-	"golang.org/x/term"
+	"github.com/kirill-scherba/tru/term"
 )
 
 type statistic struct {
@@ -327,7 +327,7 @@ func (tru *Tru) printStatistic(prnt bool, next ...time.Time) {
 			}
 		}
 		for i := from; i < l; i++ {
-			str += "\033[K" + tru.statMsgs.get(i) + "\n"
+			str += term.Func.ClearLine() + tru.statMsgs.get(i) + "\n"
 		}
 		n = l - from
 		return
@@ -340,12 +340,14 @@ func (tru *Tru) printStatistic(prnt bool, next ...time.Time) {
 		table, numRows := tru.statToString(true)
 
 		// Header terminal commands
-		str += "\033[s"    // save the cursor position
-		str += "\033[1;1H" // set cursor position
-		str += "\033[?7l"  // no wrap
+		str += term.Func.SaveCursorPosition()
+		str += term.Func.SetCursorPosition(1, 1)
+		str += term.Func.WrapOff()
 
 		// Table and title
-		str += fmt.Sprintf("\033[KTRU %s, RCH: %d, SCH: %d, run time: %v\n\033[K%s\n\033[K",
+		str += fmt.Sprintf(term.Func.ClearLine()+"TRU %s, RCH: %d, SCH: %d, run time: %v\n"+
+			term.Func.ClearLine()+"%s\n"+
+			term.Func.ClearLine(),
 			tru.LocalAddr().String(),
 			len(tru.readerCh),
 			len(tru.senderCh),
@@ -354,15 +356,15 @@ func (tru *Tru) printStatistic(prnt bool, next ...time.Time) {
 		)
 
 		// Log with main messages
-		msglog, n := getLog(numRows + 3) // get messages log
-		str += "\033[K\n"                // clear line
-		str += msglog                    // messages
+		msglog, n := getLog(numRows + 3)
+		str += term.Func.ClearLine() + "\n"
+		str += msglog
 
 		// Footer terminal command
-		str += "\033[K\n"                              // clear line
-		str += fmt.Sprintf("\033[%d;r", numRows+3+n+1) // set scroll area
-		str += "\033[u"                                // restore the cursor position
-		str += "\033[?7h"                              // wrap
+		str += term.Func.ClearLine() + "\n"
+		str += term.Func.SetScrollRegion(numRows + 3 + n + 1)
+		str += term.Func.RestoreCursorPosition()
+		str += term.Func.WrapOn()
 
 		return
 	}
@@ -386,8 +388,9 @@ func (tru *Tru) StopPrintStatistic() {
 
 	if tru.statTimer != nil {
 		tru.statTimer.Stop()
-		fmt.Print("\033[r") // reset scroll area
-		fmt.Print("\033[u") // restore the cursor position
+		str := term.Func.ResetScrollRegion()
+		str += term.Func.RestoreCursorPosition()
+		fmt.Print(str)
 	}
 }
 
