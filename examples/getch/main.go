@@ -4,25 +4,20 @@ import (
 	"bytes"
 	"fmt"
 	"os"
-	"os/exec"
 	"time"
 
-	"golang.org/x/term"
+	termx "github.com/kirill-scherba/tru/term"
 )
 
 func getch() []byte {
 
-	// fmt.Println("\033[?25l")
-
-	oldState, err := term.MakeRaw(int(os.Stdin.Fd()))
+	oldState, err := termx.MakeNonBlock(int(os.Stdin.Fd()))
 	if err != nil {
 		panic(err)
 	}
-	defer term.Restore(int(os.Stdin.Fd()), oldState)
+	defer termx.RestoreState(int(os.Stdin.Fd()), oldState)
 
-	// t := os.NewFile(os.Stdin.Fd(), "tru terminal")
 	bytes := make([]byte, 3)
-	// numRead, err := t.Read(bytes)
 	numRead, err := os.Stdin.Read(bytes)
 	if err != nil {
 		return nil
@@ -31,24 +26,44 @@ func getch() []byte {
 	return bytes[0:numRead]
 }
 
-type sh struct{}
+// Returns either an ascii code, or (if input is an arrow) a Javascript key code.
+// func getChar() []byte {
+// 	t, _ := term.Open("/dev/tty")
+// 	term.RawMode(t)
+// 	bytes := make([]byte, 3)
 
-func (sh *sh) Read(b []byte) (int, error) {
-	return os.Stdin.Read(b)
-}
+// 	numRead, err := t.Read(bytes)
+// 	if err != nil {
+// 		return nil
+// 	}
 
-func (sh *sh) Write(b []byte) (int, error) {
-	return os.Stdout.Write(b)
-}
+// 	t.Restore()
+// 	t.Close()
+// 	return bytes[0:numRead]
+// }
+
+// func getch2() []byte {
+
+// 	// Disable input buffering
+// 	exec.Command("stty", "-F", "/dev/tty", "-icanon", "min", "1").Run()
+// 	// Disable echo, and interrupt
+// 	exec.Command("stty", "-F", "/dev/tty", "-echo", "-isig").Run() // "-echoctl",
+// 	// Enable input buffering, echo and interrupt
+// 	defer exec.Command("stty", "-F", "/dev/tty", "icanon", "echo", "isig").Run()
+
+// 	bytes := make([]byte, 3)
+
+// 	numRead, err := os.Stdin.Read(bytes)
+// 	if err != nil {
+// 		return nil
+// 	}
+
+// 	return bytes[0:numRead]
+// }
 
 func main() {
 
-	// Method 1
-	// disable input buffering
-	exec.Command("stty", "-F", "/dev/tty", "cbreak", "min", "1").Run()
-	// do not display entered characters on the screen
-	exec.Command("stty", "-F", "/dev/tty", "-echo").Run()
-
+	// Rundom output
 	go func() {
 		for {
 			time.Sleep(2 * time.Second)
@@ -56,19 +71,28 @@ func main() {
 		}
 	}()
 
-	var b []byte = make([]byte, 3)
-	for {
-		n, _ := os.Stdin.Read(b)
-		fmt.Println("I got the byte", b[:n], "("+string(b[:n])+")")
-		if string(b[:n]) == "q" {
-			break
-		}
-	}
-	exec.Command("stty", "-F", "/dev/tty", "echo").Run()
+	// Method 1
+	// if 1 == 0 {
+	// 	// disable input buffering
+	// 	exec.Command("stty", "-F", "/dev/tty", "cbreak", "min", "1").Run()
+	// 	// do not display entered characters on the screen
+	// 	exec.Command("stty", "-F", "/dev/tty", "-echo").Run()
+
+	// 	var b []byte = make([]byte, 3)
+	// 	for {
+	// 		n, _ := os.Stdin.Read(b)
+	// 		fmt.Println("I got the byte", b[:n], "("+string(b[:n])+")")
+	// 		if string(b[:n]) == "q" {
+	// 			break
+	// 		}
+	// 	}
+	// 	exec.Command("stty", "-F", "/dev/tty", "echo").Run()
+	// }
 
 	// Method 2
 L:
 	for {
+		// c := getch()
 		c := getch()
 		switch {
 		case bytes.Equal(c, []byte{3}):

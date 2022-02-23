@@ -8,11 +8,6 @@ import (
 	"github.com/kirill-scherba/tru/term"
 )
 
-// hotkey is tru terminal hotkey menu
-// type hotkey struct {
-// 	*hotkey.Hotkey
-// }
-
 func NewHotkey(tru *Tru) *hotkey.Hotkey {
 	quit := func(h *hotkey.Hotkey) {
 		h.Stop()

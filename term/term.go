@@ -5,48 +5,18 @@
 // Package term provides support functions for dealing with terminals, as
 // commonly found on UNIX systems.
 //
-// Function Getch is the most common requirement:
+// The Getch function is the most interesting:
 //
 // 	fmt.Println("Press any key to continue...")
 // 	term.Getch()
 //
-// Note that on non-Unix systems os.Stdin.Fd() may not be 0 and Getch() may run
-// incorrectly
+// See the getch example.
 package term
 
 import (
 	"fmt"
 	"os"
-
-	"golang.org/x/term"
 )
-
-// Getch waits terminal key pressed and return it code
-func Getch() []byte {
-
-	oldState, err := term.MakeRaw(int(os.Stdin.Fd()))
-	if err != nil {
-		panic(err)
-	}
-	defer term.Restore(int(os.Stdin.Fd()), oldState)
-
-	bytes := make([]byte, 3)
-	numRead, err := os.Stdin.Read(bytes)
-	if err != nil {
-		return nil
-	}
-
-	return bytes[0:numRead]
-}
-
-// Anykey waits until a key is pressed
-func Anykey() { Getch() }
-
-// GetSize returns the visible dimensions of the given terminal.
-// These dimensions don't include any scrollback buffer height.
-func GetSize(fd int) (width, height int, err error) {
-	return term.GetSize(fd)
-}
 
 // ColorFuncs contains functions which retun escape sequences of terminal colors
 // that can be written to the terminal in order to achieve different ColorFuncs
@@ -194,4 +164,60 @@ func (k KeysFuncs) CtrlD() []byte {
 // Left return arrow left key code
 func (k KeysFuncs) Left() []byte {
 	return []byte{27, 91, 68}
+}
+
+// State contains the state of a terminal.
+type State struct {
+	state
+}
+
+// IsTerminal returns whether the given file descriptor is a terminal.
+func IsTerminal(fd int) bool {
+	return isTerminal(fd)
+}
+
+// GetSize returns the visible dimensions of the given terminal.
+//
+// These dimensions don't include any scrollback buffer height.
+func GetSize(fd int) (width, height int, err error) {
+	return getSize(fd)
+}
+
+// Getch waits terminal key pressed and return it code
+func Getch() []byte {
+
+	oldState, err := MakeNonBlock(int(os.Stdin.Fd()))
+	if err != nil {
+		panic(err)
+	}
+	defer RestoreState(int(os.Stdin.Fd()), oldState)
+
+	bytes := make([]byte, 3)
+	numRead, err := os.Stdin.Read(bytes)
+	if err != nil {
+		return nil
+	}
+
+	return bytes[0:numRead]
+}
+
+// Anykey waits until a key is pressed
+func Anykey() { Getch() }
+
+// MakeNonBlock puts the terminal connected to the non block mode and returns
+// the previous state of the terminal so that it can be restored
+func MakeNonBlock(fd int) (*State, error) {
+	return makeNonBlock(fd)
+}
+
+// GetState returns the current state of a terminal which may be useful to
+// restore the terminal after a signal.
+func GetState(fd int) (*State, error) {
+	return getState(fd)
+}
+
+// RestoreState restores the terminal connected to the given file descriptor to a
+// previous state.
+func RestoreState(fd int, oldState *State) error {
+	return restoreState(fd, oldState)
 }
