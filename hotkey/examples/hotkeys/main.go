@@ -36,15 +36,16 @@ func main() {
 			{Code: term.Keys.CtrlC(), Name: "^C"},
 		}, "quit from hotkey menu", func(h *hotkey.Hotkey) {
 			fmt.Println("Quit...")
+			h.Stop()
 			os.Exit(0)
-		},
-		).
+		}).
 
 		// Left key pressed
 		Add(hotkey.KeyCode{Code: term.Keys.Left()},
 			"left key action menu", func(h *hotkey.Hotkey) {
 				fmt.Println("Left key pressed...")
-			})
+			},
+		)
 
 	select {}
 }

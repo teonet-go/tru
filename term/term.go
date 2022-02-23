@@ -30,9 +30,8 @@ func Getch() []byte {
 	}
 	defer term.Restore(int(os.Stdin.Fd()), oldState)
 
-	t := os.NewFile(os.Stdin.Fd(), "teoterm")
 	bytes := make([]byte, 3)
-	numRead, err := t.Read(bytes)
+	numRead, err := os.Stdin.Read(bytes)
 	if err != nil {
 		return nil
 	}

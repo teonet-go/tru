@@ -59,6 +59,8 @@ func (h *Hotkey) Add(keys interface{}, description string, action func(h *Hotkey
 
 	var keysAr []KeyCode
 	switch v := keys.(type) {
+	case []byte:
+		keysAr = append(keysAr, KeyCode{Code: v})
 	case string:
 		keysAr = append(keysAr, KeyCode{Code: []byte(v)})
 	case []string:

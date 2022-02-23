@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/kirill-scherba/tru/hotkey"
 	"github.com/kirill-scherba/tru/teolog"
 )
 
@@ -32,6 +33,7 @@ type Tru struct {
 	privateKey *rsa.PrivateKey     // Common private key
 	maxDataLen int                 // Max data len in created packets, 0 - maximum UDP len
 	listenStop chan interface{}    // Tru listen wait stop channel
+	hotkey     *hotkey.Hotkey      // Hotkey menu
 	mu         sync.RWMutex        // Channels map mutex
 }
 
@@ -50,10 +52,11 @@ var drop = flag.Int("drop", 0, "drop send packets")
 var ErrTruClosed = errors.New("tru listner closed")
 
 // New create new tru object and start listen udp packets. Parameters:
-//   port int: local port number, 0 for any;
-//   ReaderFunc: message receiver callback function;
+//   port int: local port number, 0 for any
+//   ReaderFunc: message receiver callback function
 //   *teolog.Teolog: pointer to teolog
 //   teolog.TeologFilter: loggers filter
+//   bool: TRU terminal hokey menu on
 func New(port int, params ...interface{}) (tru *Tru, err error) {
 
 	// Create tru object
@@ -78,6 +81,12 @@ func New(port int, params ...interface{}) (tru *Tru, err error) {
 		// Teonet loggers filter
 		case teolog.TeologFilter:
 			logfilter = v
+
+		// TRU hokey menu
+		case bool:
+			if v {
+				tru.hotkey = NewHotkey(tru)
+			}
 
 		// Wrong parameter
 		default:
@@ -139,7 +148,7 @@ func (tru *Tru) Close() {
 
 	// Stop listner and statistic
 	tru.stopListen()
-	tru.StopPrintStatistic()
+	tru.StatisticPrintStop()
 	log.Connect.Println("tru closed")
 }
 

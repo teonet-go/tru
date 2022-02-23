@@ -299,8 +299,8 @@ func (cs *ChannelsStatistic) NumRows() (numRows int) {
 	return
 }
 
-// PrintStatistic print tru statistics continously
-func (tru *Tru) PrintStatistic() {
+// StatisticPrint print tru statistics continously
+func (tru *Tru) StatisticPrint() {
 	tru.printStatistic(!*stathide)
 }
 
@@ -381,8 +381,8 @@ func (tru *Tru) printStatistic(prnt bool, next ...time.Time) {
 	})
 }
 
-// StopPrintStatistic stop print statistic
-func (tru *Tru) StopPrintStatistic() {
+// StatisticPrintStop stop print statistic
+func (tru *Tru) StatisticPrintStop() {
 	tru.mu.Lock()
 	defer tru.mu.Unlock()
 
@@ -391,7 +391,15 @@ func (tru *Tru) StopPrintStatistic() {
 		str := term.Func.ResetScrollRegion()
 		str += term.Func.RestoreCursorPosition()
 		fmt.Print(str)
+		tru.statTimer = nil
 	}
+}
+
+// StatisticPrintRunning return true if Statistic Print running now
+func (tru *Tru) StatisticPrintRunning() bool {
+	tru.mu.RLock()
+	defer tru.mu.RUnlock()
+	return tru.statTimer != nil
 }
 
 // statToString get and return channels statistic table in string

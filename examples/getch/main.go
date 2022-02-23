@@ -1,17 +1,18 @@
 package main
 
 import (
-	"bufio"
 	"bytes"
 	"fmt"
 	"os"
+	"os/exec"
+	"time"
 
 	"golang.org/x/term"
 )
 
 func getch() []byte {
 
-	fmt.Println("\033[?25l")
+	// fmt.Println("\033[?25l")
 
 	oldState, err := term.MakeRaw(int(os.Stdin.Fd()))
 	if err != nil {
@@ -19,9 +20,10 @@ func getch() []byte {
 	}
 	defer term.Restore(int(os.Stdin.Fd()), oldState)
 
-	t := os.NewFile(os.Stdin.Fd(), "tru terminal")
+	// t := os.NewFile(os.Stdin.Fd(), "tru terminal")
 	bytes := make([]byte, 3)
-	numRead, err := t.Read(bytes)
+	// numRead, err := t.Read(bytes)
+	numRead, err := os.Stdin.Read(bytes)
 	if err != nil {
 		return nil
 	}
@@ -29,8 +31,42 @@ func getch() []byte {
 	return bytes[0:numRead]
 }
 
+type sh struct{}
+
+func (sh *sh) Read(b []byte) (int, error) {
+	return os.Stdin.Read(b)
+}
+
+func (sh *sh) Write(b []byte) (int, error) {
+	return os.Stdout.Write(b)
+}
+
 func main() {
 
+	// Method 1
+	// disable input buffering
+	exec.Command("stty", "-F", "/dev/tty", "cbreak", "min", "1").Run()
+	// do not display entered characters on the screen
+	exec.Command("stty", "-F", "/dev/tty", "-echo").Run()
+
+	go func() {
+		for {
+			time.Sleep(2 * time.Second)
+			fmt.Println("Test\nTest\nTest")
+		}
+	}()
+
+	var b []byte = make([]byte, 3)
+	for {
+		n, _ := os.Stdin.Read(b)
+		fmt.Println("I got the byte", b[:n], "("+string(b[:n])+")")
+		if string(b[:n]) == "q" {
+			break
+		}
+	}
+	exec.Command("stty", "-F", "/dev/tty", "echo").Run()
+
+	// Method 2
 L:
 	for {
 		c := getch()
@@ -46,26 +82,9 @@ L:
 		case bytes.Equal(c, []byte{27, 91, 68}): // left
 			fmt.Println("LEFT pressed", c)
 		case bytes.Equal(c, []byte{27, 91, 67}): // right
-			fmt.Println("RIGHT pressed", c)
+			fmt.Println("RIGHT ! pressed", c)
 		default:
 			fmt.Println("Unknown pressed", c, "("+string(c)+")")
 		}
 	}
-
-	// oldState, _ := term.MakeRaw(int(os.Stdin.Fd()))
-	// defer term.Restore(int(os.Stdin.Fd()), oldState)
-
-	r := bufio.NewReader(os.Stdin)
-	w := bufio.NewWriter(os.Stdout)
-	c := bufio.NewReadWriter(r, w)
-	t := term.NewTerminal(c, "teo > ")
-	t.AutoCompleteCallback = func(line string, pos int, key rune) (newLine string, newPos int, ok bool) {
-		// newLine = line
-		// ok = true
-		return
-	}
-
-	str, _ := t.ReadLine()
-
-	fmt.Println("str:", str)
 }
