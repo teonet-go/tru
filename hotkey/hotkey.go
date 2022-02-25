@@ -23,21 +23,17 @@ import (
 )
 
 type Hotkey struct {
-	hotkeys map[string]*hotkeyData
-	stop    bool
+	hotkeys       map[string]*hotkeyData
+	unknownKey    func(h *Hotkey, ch []byte)
+	nextKeyAction func(ch []byte)
+	state         interface{}
+	stop          bool
 }
 
 type hotkeyData struct {
 	keys        []KeyCode
 	description string
 	action      func(h *Hotkey)
-}
-
-// New Create new hotkey menu
-func New() *Hotkey {
-	h := &Hotkey{}
-	h.hotkeys = make(map[string]*hotkeyData)
-	return h
 }
 
 // KeyCode define key code and key name which hows in hokey meny
@@ -52,6 +48,32 @@ func (hk KeyCode) name() string {
 		return hk.Name
 	}
 	return string(hk.Code)
+}
+
+// New Create new hotkey menu
+func New() *Hotkey {
+	h := &Hotkey{}
+	h.hotkeys = make(map[string]*hotkeyData)
+	h.unknownKey = defUnknownKey
+	return h
+}
+
+// SetState set users menu state. State is some interface which user can
+// use in its hotkey menu. State is place where user can save its own menu
+// parameters
+func (h *Hotkey) SetState(state interface{}) *Hotkey {
+	h.state = state
+	return h
+}
+
+// State return saved user menu state
+func (h *Hotkey) State() interface{} {
+	return h.state
+}
+
+// NextKeyAction set action which execute when key pressed nex time
+func (h *Hotkey) NextKeyAction(f func(ch []byte)) {
+	h.nextKeyAction = f
 }
 
 // Add hotkey menu
@@ -83,6 +105,17 @@ func (h *Hotkey) Add(keys interface{}, description string, action func(h *Hotkey
 		h.hotkeys[string(l.Code)] = hd
 	}
 	return h
+}
+
+// AddUnknown add action function which executes when unknown key pressed
+func (h *Hotkey) AddUnknown(action func(h *Hotkey, ch []byte)) *Hotkey {
+	h.unknownKey = action
+	return h
+}
+
+// defUnknownKey default action when unknown key pressed
+func defUnknownKey(h *Hotkey, ch []byte) {
+	fmt.Println("unknown key pressed", ch)
 }
 
 // String return string contains hotkey menu help
@@ -125,11 +158,11 @@ func (h *Hotkey) String() (str string) {
 			for _, key := range ar[i].keys {
 				k = append(k, key.name())
 			}
-			keys = k
+			keys = fmt.Sprintf("%v", k)
 		} else {
 			keys = ar[i].keys[0].name()
 		}
-		str += fmt.Sprintf("%v\t\t%s\n", keys, ar[i].description)
+		str += fmt.Sprintf("   %-10s %s\n", keys, ar[i].description)
 	}
 
 	return
@@ -150,9 +183,15 @@ func (h *Hotkey) Stop() {
 func (h *Hotkey) run() {
 	for !h.stop {
 		ch := term.Getch()
+		if h.nextKeyAction != nil {
+			h.nextKeyAction(ch)
+			h.nextKeyAction = nil
+		}
 		hd, ok := h.hotkeys[string(ch)]
 		if !ok {
-			fmt.Println("unknown key pressed", ch)
+			if h.unknownKey != nil {
+				h.unknownKey(h, ch)
+			}
 			continue
 		}
 		if hd.action == nil {
