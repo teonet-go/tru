@@ -85,7 +85,7 @@ func New(port int, params ...interface{}) (tru *Tru, err error) {
 		// TRU hokey menu
 		case bool:
 			if v {
-				tru.hotkey = NewHotkey(tru)
+				tru.hotkey = tru.newHotkey()
 			}
 
 		// Wrong parameter
@@ -383,4 +383,34 @@ func (tru *Tru) senderProccess() {
 		// Write packet to addr
 		tru.writeTo(data, r.ch.addr)
 	}
+}
+
+const pacName = "Teonet Reliable UDP (TRU) v5"
+const pacVersion = "0.0.1"
+
+// Logo return tru logo in string format
+func Logo(appName, appVersion string) (str string) {
+	const defName = "Sample application"
+	const defVersion = "0.0.1"
+	const logo = `
+ _____ ____  _   _  
+|_   _|  _ \| | | | v5
+  | | | |_) | | | |
+  | | |  _ <| |_| |
+  |_| |_| \_\\___/ 
+`
+	if len(appName) == 0 {
+		appName = defName
+	}
+	if len(appVersion) == 0 {
+		appVersion = defVersion
+	}
+	str += logo
+	str += fmt.Sprintf("\n %s ver %s, based on %s ver %s\n",
+		appName, appVersion, pacName, pacVersion)
+
+	return
+}
+func (tru *Tru) Logo(appName, appVersion string) (str string) {
+	return Logo(appName, appVersion)
 }
