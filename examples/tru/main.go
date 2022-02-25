@@ -22,6 +22,7 @@ var addr = flag.String("a", "", "remote address to connect to")
 var loglevel = flag.String("loglevel", "", "set log level")
 var logfilter = flag.String("logfilter", "", "set log filter")
 var stat = flag.Bool("stat", false, "print statistic")
+var hotkey = flag.Bool("hotkey", false, "start hotkey menu")
 var delay = flag.Int("delay", 0, "send delay in Microseconds")
 var sendlen = flag.Int("sendlen", 0, "send packet data length")
 var datalen = flag.Int("datalen", 0, "set max data len in created packets, 0 - maximum UDP len")
@@ -73,7 +74,7 @@ func main() {
 	}
 
 	// Create server connection and start listen incominng packets
-	tru, err := tru.New(*port, Reader, log, logFilter)
+	tru, err := tru.New(*port, Reader, log, *hotkey, logFilter)
 	if err != nil {
 		log.Error.Fatal("can't create tru, err: ", err)
 	}
@@ -88,7 +89,7 @@ func main() {
 
 	// Print statistic if -stat flag is on
 	if *stat {
-		tru.PrintStatistic()
+		tru.StatisticPrint()
 	}
 
 	// React to Ctrl+C

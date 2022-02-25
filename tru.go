@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/kirill-scherba/tru/hotkey"
 	"github.com/kirill-scherba/tru/teolog"
 )
 
@@ -32,6 +33,7 @@ type Tru struct {
 	privateKey *rsa.PrivateKey     // Common private key
 	maxDataLen int                 // Max data len in created packets, 0 - maximum UDP len
 	listenStop chan interface{}    // Tru listen wait stop channel
+	hotkey     *hotkey.Hotkey      // Hotkey menu
 	mu         sync.RWMutex        // Channels map mutex
 }
 
@@ -50,10 +52,11 @@ var drop = flag.Int("drop", 0, "drop send packets")
 var ErrTruClosed = errors.New("tru listner closed")
 
 // New create new tru object and start listen udp packets. Parameters:
-//   port int: local port number, 0 for any;
-//   ReaderFunc: message receiver callback function;
+//   port int: local port number, 0 for any
+//   ReaderFunc: message receiver callback function
 //   *teolog.Teolog: pointer to teolog
 //   teolog.TeologFilter: loggers filter
+//   bool: TRU terminal hokey menu on
 func New(port int, params ...interface{}) (tru *Tru, err error) {
 
 	// Create tru object
@@ -78,6 +81,12 @@ func New(port int, params ...interface{}) (tru *Tru, err error) {
 		// Teonet loggers filter
 		case teolog.TeologFilter:
 			logfilter = v
+
+		// TRU hokey menu
+		case bool:
+			if v {
+				tru.hotkey = tru.newHotkey()
+			}
 
 		// Wrong parameter
 		default:
@@ -139,7 +148,7 @@ func (tru *Tru) Close() {
 
 	// Stop listner and statistic
 	tru.stopListen()
-	tru.StopPrintStatistic()
+	tru.StatisticPrintStop()
 	log.Connect.Println("tru closed")
 }
 
@@ -374,4 +383,34 @@ func (tru *Tru) senderProccess() {
 		// Write packet to addr
 		tru.writeTo(data, r.ch.addr)
 	}
+}
+
+const pacName = "Teonet Reliable UDP (TRU) v5"
+const pacVersion = "0.0.1"
+
+// Logo return tru logo in string format
+func Logo(appName, appVersion string) (str string) {
+	const defName = "Sample application"
+	const defVersion = "0.0.1"
+	const logo = `
+ _____ ____  _   _  
+|_   _|  _ \| | | | v5
+  | | | |_) | | | |
+  | | |  _ <| |_| |
+  |_| |_| \_\\___/ 
+`
+	if len(appName) == 0 {
+		appName = defName
+	}
+	if len(appVersion) == 0 {
+		appVersion = defVersion
+	}
+	str += logo
+	str += fmt.Sprintf("\n %s ver %s, based on %s ver %s\n",
+		appName, appVersion, pacName, pacVersion)
+
+	return
+}
+func (tru *Tru) Logo(appName, appVersion string) (str string) {
+	return Logo(appName, appVersion)
 }

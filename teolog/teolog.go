@@ -8,10 +8,25 @@
 package teolog
 
 import (
+	"fmt"
 	"io/ioutil"
 	"log"
 	"os"
 	"strings"
+)
+
+// Log levels constant
+const (
+	None     LogLevel = iota // No logs
+	Error                    // Errors log (show only errors)
+	User                     // User level log (show User logs and Error logs)
+	Info                     // Info level (show Info, User and Error logs)
+	Connect                  // Connect level (show connect, Info, User and Error logs)
+	Debug                    // Debug level (show debug, connect, Info, User and Error logs)
+	Debugv                   // Debugv level (show debugv, debug, connect, Info, User and Error logs)
+	Debugvv                  // Debugvv level (show debugvv, debugv, debug, connect, Info, User and Error logs)
+	Debugvvv                 // Debugvvv level (show debugvvv, debugvv, debugv, debug, connect, Info, User and Error logs)
+	numLevels
 )
 
 type Teolog struct {
@@ -24,23 +39,16 @@ type Teolog struct {
 	Debugvv  *log.Logger
 	Debugvvv *log.Logger
 	levels   []*log.Logger
-	level    int
+	level    LogLevel
 	filter   TeologFilter
 	writer   writer
 }
 
-// Log levels constant
-const (
-	None     = iota // No logs
-	Error           // Errors log (show only errors)
-	User            // User level log (show User logs and Error logs)
-	Info            // Info level (show Info, User and Error logs)
-	Connect         // Connect level (show connect, Info, User and Error logs)
-	Debug           // Debug level (show debug, connect, Info, User and Error logs)
-	Debugv          // Debugv level (show debugv, debug, connect, Info, User and Error logs)
-	Debugvv         // Debugvv level (show debugvv, debugv, debug, connect, Info, User and Error logs)
-	Debugvvv        // Debugvvv level (show debugvvv, debugvv, debugv, debug, connect, Info, User and Error logs)
-)
+type LogLevel int
+
+func (l LogLevel) String() string {
+	return new(Teolog).levelToStr(l)
+}
 
 // New create new teolog
 func New() (teolog *Teolog) {
@@ -70,19 +78,26 @@ func (l *Teolog) SetFlags(flag int) {
 	}
 }
 
+// Levels return levels description
+func (l *Teolog) Levels() string {
+	return l.levelsToStr()
+}
+
 // SetLevel set log level. There is there next levels from hi to low:
 // NONE, ERROR, USER, INFO, CONNECT, DEBUG, DEBUGV, DEBUGVV, DEBUGVVV
 func (l *Teolog) SetLevel(leveli interface{}) {
-	var level int
+	var level LogLevel
 	switch v := leveli.(type) {
 	case int:
+		level = LogLevel(v)
+	case LogLevel:
 		level = v
 	case string:
 		level = l.levelFromStr(v)
 	}
 	l.level = level
 	for i, tl := range l.levels {
-		if i < level {
+		if LogLevel(i) < level {
 			tl.SetOutput(l.writer) // os.Stdout)
 		} else {
 			tl.SetOutput(ioutil.Discard)
@@ -90,9 +105,38 @@ func (l *Teolog) SetLevel(leveli interface{}) {
 	}
 }
 
+// Level return current log level
+func (l *Teolog) Level() LogLevel {
+	return l.level
+}
+
+// String return current log level in string
+func (l *Teolog) String() string {
+	return l.levelToStr(l.level)
+}
+
+// SwitchLevel switch level to nexet and return level number
+func (l *Teolog) SwitchLevel() LogLevel {
+	l.level++
+	if l.level >= numLevels {
+		l.level = 0
+	}
+	l.SetLevel(l.level)
+	return l.level
+}
+
 // SetFilter set log filter
-func (l *Teolog) SetFilter(f TeologFilter) {
-	l.filter = f
+func (l *Teolog) SetFilter(f interface{}) {
+
+	switch v := f.(type) {
+	case TeologFilter:
+		l.filter = v
+	case string:
+		l.filter = Logfilter(v)
+	default:
+		panic("wrong filter tipe")
+	}
+
 }
 
 // ClearFilter clear log filter
@@ -100,9 +144,20 @@ func (l *Teolog) ClearFilter() {
 	l.filter = []string{}
 }
 
+// Filter return log filter
+func (l *Teolog) Filter() (str string) {
+	for i := range l.filter {
+		if i > 0 {
+			str += " || "
+		}
+		str += l.filter[i]
+	}
+	return
+}
+
 // levelFromStr get level from string
-func (l *Teolog) levelFromStr(level string) int {
-	switch strings.ToLower(level) {
+func (l *Teolog) levelFromStr(level string) LogLevel {
+	switch strings.ToLower(strings.TrimSpace(level)) {
 	case "none":
 		return None
 	case "error":
@@ -124,6 +179,48 @@ func (l *Teolog) levelFromStr(level string) int {
 	default:
 		return None
 	}
+}
+
+// levelToStr return current log level in string
+func (l *Teolog) levelToStr(level LogLevel) string {
+	switch level {
+	case None:
+		return "None"
+	case Error:
+		return "Error"
+	case User:
+		return "User"
+	case Info:
+		return "Info"
+	case Connect:
+		return "Connect"
+	case Debug:
+		return "Debug"
+	case Debugv:
+		return "DebugV"
+	case Debugvv:
+		return "DebugVV"
+	case Debugvvv:
+		return "DebugVVV"
+	default:
+		return "Wrong level"
+	}
+}
+
+// levelsToStr return levels description
+func (l *Teolog) levelsToStr() (str string) {
+	var f = " %-10s %s\n"
+	str += "\n List of available logger levels:\n\n"
+	str += fmt.Sprintf(f, "None", "No logs")
+	str += fmt.Sprintf(f, "Error", "Errors log")
+	str += fmt.Sprintf(f, "User", "User level log")
+	str += fmt.Sprintf(f, "Info", "Info level")
+	str += fmt.Sprintf(f, "Connect", "Connect")
+	str += fmt.Sprintf(f, "Debug", "Debug level")
+	str += fmt.Sprintf(f, "Debugv", "Debugv level")
+	str += fmt.Sprintf(f, "Debugvv", "Debugvv level")
+	str += fmt.Sprintf(f, "Debugvvv", "Debugvvv level")
+	return
 }
 
 // TeologFilter teonet log filter type
