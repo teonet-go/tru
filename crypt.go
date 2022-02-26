@@ -40,7 +40,7 @@ func (tru *Tru) newCrypt() (c *crypt, err error) {
 		c.privateKey = tru.privateKey
 		return
 	}
-	c.privateKey, err = tru.GeneratePrivateKey()
+	c.privateKey, err = GeneratePrivateKey()
 	if err != nil {
 		return
 	}
@@ -49,7 +49,7 @@ func (tru *Tru) newCrypt() (c *crypt, err error) {
 }
 
 // GeneratePrivateKey create new RSA private key
-func (tru *Tru) GeneratePrivateKey() (privateKey *rsa.PrivateKey, err error) {
+func GeneratePrivateKey() (privateKey *rsa.PrivateKey, err error) {
 	return rsa.GenerateKey(rand.Reader, bitSize)
 }
 

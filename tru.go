@@ -37,6 +37,9 @@ type Tru struct {
 	mu         sync.RWMutex        // Channels map mutex
 }
 
+type ShowStat bool    // Parameters show statistic type
+type StartHotkey bool // Parameters start hotkey menu
+
 // Lengs of readerChData and senderChData
 const (
 	chanLen        = 10
@@ -51,12 +54,14 @@ var drop = flag.Int("drop", 0, "drop send packets")
 
 var ErrTruClosed = errors.New("tru listner closed")
 
-// New create new tru object and start listen udp packets. Parameters:
-//   port int: local port number, 0 for any
-//   ReaderFunc: message receiver callback function
-//   *teolog.Teolog: pointer to teolog
-//   teolog.TeologFilter: loggers filter
-//   bool: TRU terminal hokey menu on
+// New create new tru object and start listen udp packets. Parameters by type:
+//   int:       	  local port number, 0 for any
+//   tru.ReaderFunc:  message receiver callback function
+//   *teolog.Teolog:  pointer to teolog
+//   teolog.Filter:   loggers filter
+//   tru.StartHotkey: start hotkey meny
+//   tru.ShowStat:    show statistic
+//   bool:            terminal hokey menu on
 func New(port int, params ...interface{}) (tru *Tru, err error) {
 
 	// Create tru object
@@ -64,7 +69,8 @@ func New(port int, params ...interface{}) (tru *Tru, err error) {
 	tru.sendDelay = startSendDelay
 
 	// Parse parameters
-	var logfilter teolog.TeologFilter
+	var logFilter teolog.Filter
+	var logLevel string
 	for _, p := range params {
 		switch v := p.(type) {
 
@@ -78,19 +84,37 @@ func New(port int, params ...interface{}) (tru *Tru, err error) {
 		case *teolog.Teolog:
 			log = v
 
-		// Teonet loggers filter
-		case teolog.TeologFilter:
-			logfilter = v
+		// Teonet loggers level
+		case string:
+			logLevel = v
 
-		// TRU hokey menu
-		case bool:
+		// Teonet loggers filter
+		case teolog.Filter:
+			logFilter = v
+
+		// Start hokey menu
+		case StartHotkey:
 			if v {
 				tru.hotkey = tru.newHotkey()
 			}
 
+		// Show statistic
+		case ShowStat:
+			if v {
+				tru.StatisticPrint()
+			}
+
+		// Private key
+		case *rsa.PrivateKey:
+			// TODO: set private key
+
+		// Connect to this server callback
+		case func(*Channel, error):
+			// TODO: set this callback
+
 		// Wrong parameter
 		default:
-			err = errors.New("wrong parameter")
+			err = fmt.Errorf("incorrect attribute type '%T'", v)
 			return
 		}
 	}
@@ -99,7 +123,8 @@ func New(port int, params ...interface{}) (tru *Tru, err error) {
 	if log == nil {
 		log = teolog.New()
 	}
-	log.SetFilter(logfilter)
+	log.SetFilter(logFilter)
+	log.SetLevel(logLevel)
 
 	// Init tru object
 	tru.listenStop = make(chan interface{})
@@ -114,7 +139,7 @@ func New(port int, params ...interface{}) (tru *Tru, err error) {
 	// if param.privateKey == nil {
 	//	param.privateKey, _ = GeneratePrivateKey()
 	// }
-	tru.privateKey, err = tru.GeneratePrivateKey()
+	tru.privateKey, err = GeneratePrivateKey()
 	if err != nil {
 		return
 	}
@@ -171,11 +196,16 @@ func (tru *Tru) LocalAddr() net.Addr {
 	return tru.conn.LocalAddr()
 }
 
-// writeTo writes a packet with data to addr
-func (tru *Tru) writeTo(data []byte, addri interface{}) (err error) {
+// LocalPort returns the local network port
+func (tru *Tru) LocalPort() int {
+	return tru.LocalAddr().(*net.UDPAddr).Port
+}
+
+// writeTo writes a packet with data to an UDP address (direct write to UDP)
+func (tru *Tru) WriteTo(data []byte, addri interface{}) (addr net.Addr, err error) {
 
 	// Resolve UDP address
-	var addr *net.UDPAddr
+	// var addr *net.UDPAddr
 	switch v := addri.(type) {
 	case string:
 		addr, err = net.ResolveUDPAddr("udp", v)
@@ -381,7 +411,7 @@ func (tru *Tru) senderProccess() {
 		}
 
 		// Write packet to addr
-		tru.writeTo(data, r.ch.addr)
+		tru.WriteTo(data, r.ch.addr)
 	}
 }
 

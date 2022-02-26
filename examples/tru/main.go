@@ -40,41 +40,12 @@ func main() {
 	// Parse flags
 	flag.Parse()
 
-	// Set log options and filter
-	var logFilter teolog.TeologFilter
-	log.SetLevel(*loglevel)
-	if *logfilter != "" {
-		logFilter = teolog.Logfilter(*logfilter)
-	}
-
-	// CPU profiller
-	if *cpuprofile != "" {
-		f, err := os.Create(*cpuprofile)
-		if err != nil {
-			log.Debugvvv.Fatal("could not create CPU profile: ", err)
-		}
-		defer f.Close() // error handling omitted for example
-		if err := pprof.StartCPUProfile(f); err != nil {
-			log.Debugvvv.Fatal("could not start CPU profile: ", err)
-		}
-		defer pprof.StopCPUProfile()
-	}
-
-	// Memory profiler
-	if *memprofile != "" {
-		f, err := os.Create(*memprofile)
-		if err != nil {
-			log.Debugvvv.Fatal("could not create memory profile: ", err)
-		}
-		defer f.Close() // error handling omitted for example
-		runtime.GC()    // get up-to-date statistics
-		if err := pprof.WriteHeapProfile(f); err != nil {
-			log.Debugvvv.Fatal("could not write memory profile: ", err)
-		}
-	}
+	// CPU and memory profiles
+	cpuMemoryProfiles()
 
 	// Create server connection and start listen incominng packets
-	tru, err := tru.New(*port, Reader, log, *hotkey, logFilter)
+	tru, err := tru.New(*port, Reader, tru.ShowStat(*stat),
+		tru.StartHotkey(*hotkey), log, *loglevel, teolog.Logfilter(*logfilter))
 	if err != nil {
 		log.Error.Fatal("can't create tru, err: ", err)
 	}
@@ -86,11 +57,6 @@ func main() {
 
 	// Send packets if addr flag set
 	go Sender(tru, *addr)
-
-	// Print statistic if -stat flag is on
-	if *stat {
-		tru.StatisticPrint()
-	}
 
 	// React to Ctrl+C
 	c := make(chan os.Signal, 1)
@@ -155,5 +121,33 @@ connect:
 		log.Debugv.Printf("send %d bytes data to %s, data: %s\n", len(data), ch.Addr().String(), data)
 
 		time.Sleep(time.Duration(*delay) * time.Microsecond)
+	}
+}
+
+func cpuMemoryProfiles() {
+	// CPU profiller
+	if *cpuprofile != "" {
+		f, err := os.Create(*cpuprofile)
+		if err != nil {
+			log.Debugvvv.Fatal("could not create CPU profile: ", err)
+		}
+		defer f.Close() // error handling omitted for example
+		if err := pprof.StartCPUProfile(f); err != nil {
+			log.Debugvvv.Fatal("could not start CPU profile: ", err)
+		}
+		defer pprof.StopCPUProfile()
+	}
+
+	// Memory profiler
+	if *memprofile != "" {
+		f, err := os.Create(*memprofile)
+		if err != nil {
+			log.Debugvvv.Fatal("could not create memory profile: ", err)
+		}
+		defer f.Close() // error handling omitted for example
+		runtime.GC()    // get up-to-date statistics
+		if err := pprof.WriteHeapProfile(f); err != nil {
+			log.Debugvvv.Fatal("could not write memory profile: ", err)
+		}
 	}
 }

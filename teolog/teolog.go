@@ -40,7 +40,7 @@ type Teolog struct {
 	Debugvvv *log.Logger
 	levels   []*log.Logger
 	level    LogLevel
-	filter   TeologFilter
+	filter   Filter
 	writer   writer
 }
 
@@ -129,7 +129,7 @@ func (l *Teolog) SwitchLevel() LogLevel {
 func (l *Teolog) SetFilter(f interface{}) {
 
 	switch v := f.(type) {
-	case TeologFilter:
+	case Filter:
 		l.filter = v
 	case string:
 		l.filter = Logfilter(v)
@@ -223,17 +223,17 @@ func (l *Teolog) levelsToStr() (str string) {
 	return
 }
 
-// TeologFilter teonet log filter type
-type TeologFilter []string
+// Filter teonet log filter type
+type Filter []string
 
-func (lf TeologFilter) trim() {
+func (lf Filter) trim() {
 	for i := range lf {
 		lf[i] = strings.TrimSpace(lf[i])
 	}
 }
 
 // Logfilter make log filter from string
-func Logfilter(str string) (f TeologFilter) {
+func Logfilter(str string) (f Filter) {
 	f = strings.Split(str, "||")
 	f.trim()
 	return

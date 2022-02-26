@@ -19,6 +19,11 @@ import (
 )
 
 const waitConnectionTimeout = 5 * time.Second
+const (
+	ClientConnectTimeout = waitConnectionTimeout
+	ServerConnectTimeout = waitConnectionTimeout
+	// ClientDisconnectTime = 10 * time.Millisecond
+)
 
 type connect struct {
 	connects map[string]*connectData // Connections map
@@ -108,7 +113,7 @@ func (tru *Tru) Connect(addr string, reader ...ReaderFunc) (ch *Channel, err err
 	defer close(wch)
 
 	// Send connect message
-	tru.writeTo(pac, addr)
+	_, err = tru.WriteTo(pac, addr)
 	if err != nil {
 		return
 	}

@@ -140,6 +140,16 @@ func (ch *Channel) Addr() net.Addr {
 	return ch.addr
 }
 
+// Addr return tru channels address
+func (ch *Channel) Triptime() time.Duration {
+	return ch.getTripTime()
+}
+
+// ServerMode return true if there is server mode channel
+func (ch *Channel) ServerMode() bool {
+	return ch.serverMode
+}
+
 // WriteTo writes packet with data to tru channel. Second parameter delivery is
 // callback function of PacketDeliveryFunc func, it calls when packet deliverid
 // to remout peer. The third parameter is the delivery callback timeout. The
@@ -210,7 +220,7 @@ func (ch *Channel) writeTo(data []byte, stat int, delivery []interface{}, ids ..
 	// Send disconnect immediately
 	if status == statusDisconnect {
 		data, _ := pac.MarshalBinary()
-		ch.tru.writeTo(data, ch.addr)
+		_,err = ch.tru.WriteTo(data, ch.addr)
 		return
 	}
 
