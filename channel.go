@@ -140,6 +140,16 @@ func (ch *Channel) Addr() net.Addr {
 	return ch.addr
 }
 
+// IP return remote IP
+func (ch *Channel) IP() net.IP {
+	return ch.Addr().(*net.UDPAddr).IP
+}
+
+// Port return remote port
+func (ch *Channel) Port() int {
+	return ch.Addr().(*net.UDPAddr).Port
+}
+
 // Addr return tru channels address
 func (ch *Channel) Triptime() time.Duration {
 	return ch.getTripTime()
@@ -220,7 +230,7 @@ func (ch *Channel) writeTo(data []byte, stat int, delivery []interface{}, ids ..
 	// Send disconnect immediately
 	if status == statusDisconnect {
 		data, _ := pac.MarshalBinary()
-		_,err = ch.tru.WriteTo(data, ch.addr)
+		_, err = ch.tru.WriteTo(data, ch.addr)
 		return
 	}
 
