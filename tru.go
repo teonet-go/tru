@@ -55,13 +55,13 @@ var drop = flag.Int("drop", 0, "drop send packets")
 var ErrTruClosed = errors.New("tru listner closed")
 
 // New create new tru object and start listen udp packets. Parameters by type:
-//   int:       	  local port number, 0 for any
+//   int:             local port number, 0 for any
 //   tru.ReaderFunc:  message receiver callback function
 //   *teolog.Teolog:  pointer to teolog
+//	 string:          loggers level
 //   teolog.Filter:   loggers filter
 //   tru.StartHotkey: start hotkey meny
 //   tru.ShowStat:    show statistic
-//   bool:            terminal hokey menu on
 func New(port int, params ...interface{}) (tru *Tru, err error) {
 
 	// Create tru object

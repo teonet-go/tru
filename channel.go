@@ -190,7 +190,7 @@ func (ch *Channel) writeTo(data []byte, stat int, delivery []interface{}, ids ..
 		case time.Duration:
 			deliveryTimeout = v
 		default:
-			err = errors.New("got wrong type delivery parameter")
+			err = errors.New("writeTo got wrong type of delivery parameter")
 			return
 		}
 	}
