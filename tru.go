@@ -24,6 +24,7 @@ type Tru struct {
 	conn       net.PacketConn      // Local connection
 	channels   map[string]*Channel // Channels map
 	reader     ReaderFunc          // Global tru reader
+	connectcb  ConnectFunc         // Connect to this server callback
 	readerCh   chan readerChData   // Reader channel
 	senderCh   chan senderChData   // Sender channel
 	connect    connect             // Connect methods receiver
@@ -80,6 +81,12 @@ func New(port int, params ...interface{}) (tru *Tru, err error) {
 		case ReaderFunc:
 			tru.reader = v
 
+		// Connect to this server callback
+		case func(*Channel, error):
+			tru.connectcb = v
+		case ConnectFunc:
+			tru.connectcb = v
+
 		// Teonet logger
 		case *teolog.Teolog:
 			log = v
@@ -107,10 +114,6 @@ func New(port int, params ...interface{}) (tru *Tru, err error) {
 		// Private key
 		case *rsa.PrivateKey:
 			// TODO: set private key
-
-		// Connect to this server callback
-		case func(*Channel, error):
-			// TODO: set this callback
 
 		// Wrong parameter
 		default:
@@ -360,6 +363,9 @@ func (tru *Tru) serve(n int, addr net.Addr, data []byte) {
 
 // ReaderFunc tru reder function type
 type ReaderFunc func(ch *Channel, pac *Packet, err error) (processed bool)
+
+// ConnectFunc connect to server function type
+type ConnectFunc func(*Channel, error)
 
 type readerChData struct {
 	ch  *Channel

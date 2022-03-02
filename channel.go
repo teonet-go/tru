@@ -71,6 +71,12 @@ func (tru *Tru) newChannel(addr net.Addr, serverMode ...bool) (ch *Channel, err 
 		ch.stat.sendDelay = tru.sendDelay
 	}
 	tru.channels[addr.String()] = ch
+
+	// Channel connect to server callback
+	if ch.serverMode && ch.tru.connectcb != nil {
+		ch.tru.connectcb(ch, nil)
+	}
+
 	return
 }
 
@@ -138,6 +144,11 @@ func (ch *Channel) Close() {
 // Addr return tru channels address
 func (ch *Channel) Addr() net.Addr {
 	return ch.addr
+}
+
+// String return channels addres in string
+func (ch *Channel) String() string {
+	return ch.Addr().String()
 }
 
 // IP return remote IP
