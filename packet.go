@@ -14,6 +14,31 @@ import (
 	"time"
 )
 
+// Packet status
+const (
+	statusConnect = iota
+	statusConnectServerAnswer
+	statusConnectClientAnswer
+	statusConnectDone
+	statusData
+	statusAck
+	statusPing
+	statusPong
+	statusDisconnect
+	statusPunch
+	statusSplit    = 0x80
+	statusDataNext = statusData + statusSplit
+)
+
+const (
+	maxUdpDataLength = 65527 // Max packet 65535 - 8 byte header
+	cryptAesLength   = 28    // AES crypt delete from max len packet data
+)
+
+const packetIDLimit = 0x100000          // Number of packets id (max number + 1)
+const DeliveryTimeout = 5 * time.Second // Default delivery function timeout
+
+// Packet struct
 type Packet struct {
 	id                 uint32             // Packet ID
 	status             uint8              // Packet Type
@@ -30,28 +55,6 @@ type Packet struct {
 // PacketDeliveryFunc packet delivery callback function calls when packet
 // delivered to remote peer
 type PacketDeliveryFunc func(pac *Packet, err error)
-
-const (
-	statusConnect = iota
-	statusConnectServerAnswer
-	statusConnectClientAnswer
-	statusConnectDone
-	statusData
-	statusAck
-	statusPing
-	statusPong
-	statusDisconnect
-	statusSplit    = 0x80
-	statusDataNext = statusData + statusSplit
-)
-
-const (
-	maxUdpDataLength = 65527 // Max packet 65535 - 8 byte header
-	cryptAesLength   = 28    // Ees crypt add to max len packet
-)
-
-const packetIDLimit = 0x100000          // Number of packets id (max number + 1)
-const DeliveryTimeout = 5 * time.Second // Default delivery function timeout
 
 // newPacket create new empty packet
 func (tru *Tru) newPacket() *Packet {

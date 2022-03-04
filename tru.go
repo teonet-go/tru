@@ -19,11 +19,15 @@ import (
 	"github.com/kirill-scherba/tru/teolog"
 )
 
+const truName = "Teonet Reliable UDP (TRU v5)"
+const truVersion = "0.0.1"
+
 // Tru connector
 type Tru struct {
 	conn       net.PacketConn      // Local connection
 	channels   map[string]*Channel // Channels map
-	reader     ReaderFunc          // Global tru reader
+	reader     ReaderFunc          // Global tru reader callback
+	punchcb    PunchFunc           // Punch packet callback
 	connectcb  ConnectFunc         // Connect to this server callback
 	readerCh   chan readerChData   // Reader channel
 	senderCh   chan senderChData   // Sender channel
@@ -38,8 +42,8 @@ type Tru struct {
 	mu         sync.RWMutex        // Channels map mutex
 }
 
-type ShowStat bool    // Parameters show statistic type
-type StartHotkey bool // Parameters start hotkey menu
+type Stat bool   // Parameters show statistic type
+type Hotkey bool // Parameters start hotkey menu
 
 // Lengs of readerChData and senderChData
 const (
@@ -58,6 +62,8 @@ var ErrTruClosed = errors.New("tru listner closed")
 // New create new tru object and start listen udp packets. Parameters by type:
 //   int:             local port number, 0 for any
 //   tru.ReaderFunc:  message receiver callback function
+//   tru.ConnectFunc: connect to server callback function
+//	 tru.PunchFunc:   punch callback function
 //   *teolog.Teolog:  pointer to teolog
 //	 string:          loggers level
 //   teolog.Filter:   loggers filter
@@ -87,6 +93,12 @@ func New(port int, params ...interface{}) (tru *Tru, err error) {
 		case ConnectFunc:
 			tru.connectcb = v
 
+		// Connect to this server callback
+		case func(net.Addr, []byte):
+			tru.punchcb = v
+		case PunchFunc:
+			tru.punchcb = v
+
 		// Teonet logger
 		case *teolog.Teolog:
 			log = v
@@ -100,13 +112,13 @@ func New(port int, params ...interface{}) (tru *Tru, err error) {
 			logFilter = v
 
 		// Start hokey menu
-		case StartHotkey:
+		case Hotkey:
 			if v {
 				tru.hotkey = tru.newHotkey()
 			}
 
 		// Show statistic
-		case ShowStat:
+		case Stat:
 			if v {
 				tru.StatisticPrint()
 			}
@@ -180,6 +192,11 @@ func (tru *Tru) Close() {
 	log.Connect.Println("tru closed")
 }
 
+// SetPunchCb set punch callback
+func (tru *Tru) SetPunchCb(punchcb PunchFunc) {
+	tru.punchcb = punchcb
+}
+
 // SetSendDelay set default (start) clients send delay
 func (tru *Tru) SetSendDelay(delay int) {
 	tru.sendDelay = delay
@@ -204,7 +221,7 @@ func (tru *Tru) LocalPort() int {
 	return tru.LocalAddr().(*net.UDPAddr).Port
 }
 
-// writeTo writes a packet with data to an UDP address (direct write to UDP)
+// writeTo writes a packet with data to an UDP address (unreliable write to UDP)
 func (tru *Tru) WriteTo(data []byte, addri interface{}) (addr net.Addr, err error) {
 
 	// Resolve UDP address
@@ -275,12 +292,32 @@ func (tru *Tru) serve(n int, addr net.Addr, data []byte) {
 
 	// Get channel and process connection packets
 	ch, channelExists := tru.getChannel(addr.String())
-	if !channelExists ||
-		pac.Status() == statusConnect ||
-		pac.Status() == statusConnectClientAnswer ||
-		pac.Status() == statusConnectDone {
-		// Got connect packet from existing channel, destroy this channel first
-		// becaus client reconnected
+
+	// Process connect or punc packets
+	// if !channelExists ||
+	// 	pac.Status() == statusConnect ||
+	// 	pac.Status() == statusConnectClientAnswer ||
+	// 	pac.Status() == statusConnectDone {
+	// 	// Got connect packet from existing channel, destroy this channel first
+	// 	// becaus client reconnected
+	// 	if channelExists && pac.Status() == statusConnect {
+	// 		ch.destroy(fmt.Sprint("channel reconnect, destroy ", ch.addr.String()))
+	// 	}
+	// 	// Process connection packets
+	// 	err := tru.connect.serve(tru, addr, pac)
+	// 	if channelExists && err != nil {
+	// 		ch.destroy(fmt.Sprint("channel connection error, destroy ", ch.addr.String()))
+	// 	}
+	// 	return
+	// }
+
+	// Process connect or punc packets
+	switch pac.Status() {
+
+	// Connect packets
+	case statusConnect, statusConnectServerAnswer, statusConnectClientAnswer, statusConnectDone:
+		// When got connect packet from existing channel we destroy this channel
+		// first becaus client reconnected
 		if channelExists && pac.Status() == statusConnect {
 			ch.destroy(fmt.Sprint("channel reconnect, destroy ", ch.addr.String()))
 		}
@@ -290,6 +327,20 @@ func (tru *Tru) serve(n int, addr net.Addr, data []byte) {
 			ch.destroy(fmt.Sprint("channel connection error, destroy ", ch.addr.String()))
 		}
 		return
+
+	// Punch packets: hi level software (f.e. teonet package) use punch packets
+	// to make p2p connection between tru clients
+	case statusPunch:
+		if tru.punchcb != nil {
+			tru.punchcb(addr, pac.Data())
+		}
+		return
+
+	// Wrong packets: some other packets received when channel does not exists
+	default:
+		if !channelExists {
+			return
+		}
 	}
 
 	// Process regular packets by status
@@ -367,6 +418,9 @@ type ReaderFunc func(ch *Channel, pac *Packet, err error) (processed bool)
 // ConnectFunc connect to server function type
 type ConnectFunc func(*Channel, error)
 
+// PunchFunc puch packet function type
+type PunchFunc func(addr net.Addr, data []byte)
+
 type readerChData struct {
 	ch  *Channel
 	pac *Packet
@@ -421,9 +475,6 @@ func (tru *Tru) senderProccess() {
 	}
 }
 
-const pacName = "Teonet Reliable UDP (TRU) v5"
-const pacVersion = "0.0.1"
-
 // Logo return tru logo in string format
 func Logo(appName, appVersion string) (str string) {
 	const defName = "Sample application"
@@ -443,7 +494,7 @@ func Logo(appName, appVersion string) (str string) {
 	}
 	str += logo
 	str += fmt.Sprintf("\n %s ver %s, based on %s ver %s\n",
-		appName, appVersion, pacName, pacVersion)
+		appName, appVersion, truName, truVersion)
 
 	return
 }

@@ -44,8 +44,8 @@ func main() {
 	cpuMemoryProfiles()
 
 	// Create server connection and start listen incominng packets
-	tru, err := tru.New(*port, Reader, tru.ShowStat(*stat),
-		tru.StartHotkey(*hotkey), log, *loglevel, teolog.Logfilter(*logfilter))
+	tru, err := tru.New(*port, Reader, tru.Stat(*stat),
+		tru.Hotkey(*hotkey), log, *loglevel, teolog.Logfilter(*logfilter))
 	if err != nil {
 		log.Error.Fatal("can't create tru, err: ", err)
 	}
