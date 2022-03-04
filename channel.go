@@ -112,6 +112,15 @@ func (tru *Tru) getChannelEach(f func(ch *Channel)) {
 	}
 }
 
+// writeToPunch write puch packet
+func (tru *Tru) WriteToPunch(data []byte, addri interface{}) (addr net.Addr, err error) {
+	data, err = tru.newPacket().SetStatus(statusPunch).SetData(data).MarshalBinary()
+	if err != nil {
+		return
+	}
+	return tru.WriteTo(data, addri)
+}
+
 // destroy destroy channel
 func (ch *Channel) destroy(msg string) {
 	if ch == nil {
@@ -238,7 +247,7 @@ func (ch *Channel) writeTo(data []byte, stat int, delivery []interface{}, ids ..
 		ch.stat.lastSend = time.Now()
 	}
 
-	// Send disconnect immediately
+	// Send disconnect packet immediately
 	if status == statusDisconnect {
 		data, _ := pac.MarshalBinary()
 		_, err = ch.tru.WriteTo(data, ch.addr)
