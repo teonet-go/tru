@@ -184,7 +184,7 @@ func (tru *Tru) Close() {
 	}
 
 	// Close all channels
-	tru.getChannelEach(func(ch *Channel) { ch.Close() })
+	tru.ForEachChannel(func(ch *Channel) { ch.Close() })
 
 	// Stop listner and statistic
 	tru.stopListen()

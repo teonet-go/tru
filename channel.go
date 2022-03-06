@@ -105,8 +105,8 @@ func (tru *Tru) getChannelRandom() (ch *Channel) {
 	return
 }
 
-// getChannelEach get each channel in function f
-func (tru *Tru) getChannelEach(f func(ch *Channel)) {
+// ForEachChannel get each channel and call function f
+func (tru *Tru) ForEachChannel(f func(ch *Channel)) {
 	for ch := tru.getChannelRandom(); ch != nil; ch = tru.getChannelRandom() {
 		f(ch)
 	}
@@ -132,6 +132,9 @@ func (ch *Channel) destroy(msg string) {
 
 	if ch.reader != nil {
 		ch.reader(ch, nil, ErrChannelDestroyed)
+	}
+	if ch.tru.reader != nil {
+		ch.tru.reader(ch, nil, ErrChannelDestroyed)
 	}
 
 	log.Connect.Println(msg)
