@@ -90,25 +90,26 @@ func (tru *Tru) getChannel(addr string) (ch *Channel, ok bool) {
 }
 
 // getChannelRandom get tru channel random
-func (tru *Tru) getChannelRandom() (ch *Channel) {
-	tru.mu.RLock()
-	defer tru.mu.RUnlock()
+// func (tru *Tru) getChannelRandom() (ch *Channel) {
+// 	tru.mu.RLock()
+// 	defer tru.mu.RUnlock()
 
-	if len(tru.channels) == 0 {
-		return
-	}
+// 	if len(tru.channels) == 0 {
+// 		return
+// 	}
 
-	keys := reflect.ValueOf(tru.channels).MapKeys()
-	randomIndex := rand.Intn(len(keys))
-	ch = tru.channels[keys[randomIndex].String()]
+// 	keys := reflect.ValueOf(tru.channels).MapKeys()
+// 	randomIndex := rand.Intn(len(keys))
+// 	ch = tru.channels[keys[randomIndex].String()]
 
-	return
-}
+// 	return
+// }
 
 // ForEachChannel get each channel and call function f
 func (tru *Tru) ForEachChannel(f func(ch *Channel)) {
-	for ch := tru.getChannelRandom(); ch != nil; ch = tru.getChannelRandom() {
-		f(ch)
+	keys := reflect.ValueOf(tru.channels).MapKeys()
+	for i := range keys {
+		f(tru.channels[keys[i].String()])
 	}
 }
 
