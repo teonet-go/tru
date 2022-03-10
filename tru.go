@@ -184,6 +184,7 @@ func (tru *Tru) Close() {
 	}
 
 	// Close all channels
+	log.Debug.Println("close all channels")
 	tru.ForEachChannel(func(ch *Channel) { ch.Close() })
 
 	// Stop listner and statistic
