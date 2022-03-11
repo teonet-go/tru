@@ -128,9 +128,7 @@ func (ch *Channel) destroy(msg string) {
 		return
 	}
 
-	ch.tru.mu.Lock()
-	defer ch.tru.mu.Unlock()
-
+	// Send error event to readers
 	if ch.reader != nil {
 		ch.reader(ch, nil, ErrChannelDestroyed)
 	}
@@ -138,13 +136,18 @@ func (ch *Channel) destroy(msg string) {
 		ch.tru.reader(ch, nil, ErrChannelDestroyed)
 	}
 
-	log.Connect.Println(msg)
-
+	// Destroy sendQueue and statistic
 	ch.sendQueue.destroy()
 	ch.stat.destroy()
 
-	delete(ch.tru.channels, ch.addr.String())
+	// Log messages
+	log.Connect.Println(msg)
 	ch.tru.statMsgs.add(msg)
+
+	// Delete channel from channels
+	ch.tru.mu.Lock()
+	defer ch.tru.mu.Unlock()
+	delete(ch.tru.channels, ch.addr.String())
 }
 
 // Close tru channel
