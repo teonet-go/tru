@@ -107,7 +107,9 @@ func (tru *Tru) getChannel(addr string) (ch *Channel, ok bool) {
 
 // ForEachChannel get each channel and call function f
 func (tru *Tru) ForEachChannel(f func(ch *Channel)) {
+	tru.mu.RLock()
 	keys := reflect.ValueOf(tru.channels).MapKeys()
+	tru.mu.RUnlock()
 	for i := range keys {
 		f(tru.channels[keys[i].String()])
 	}
