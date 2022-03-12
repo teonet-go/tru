@@ -167,10 +167,10 @@ func New(port int, params ...interface{}) (tru *Tru, err error) {
 	tru.senderCh = make(chan senderChData, chanLen)
 	go tru.senderProccess()
 
-	log.Connect.Println("tru created")
-
 	// start listen to incoming udp packets
 	go tru.listen()
+
+	log.Connect.Println("tru created")
 
 	return
 }
@@ -246,7 +246,6 @@ func (tru *Tru) WriteTo(data []byte, addri interface{}) (addr net.Addr, err erro
 // listen to incoming udp packets
 func (tru *Tru) listen() {
 	log.Connect.Println("start listen at", tru.LocalAddr().String())
-	defer log.Connect.Println("stop listen", tru.LocalAddr().String())
 
 	for {
 		select {
@@ -254,7 +253,7 @@ func (tru *Tru) listen() {
 		// Check channel closed to stop listen and return
 		case _, ok := <-tru.listenStop:
 			if !ok {
-				log.Debug.Println("listen wait channel closed")
+				log.Debug.Println("stop listen", tru.LocalAddr().String())
 				return
 			}
 
@@ -264,7 +263,7 @@ func (tru *Tru) listen() {
 			n, addr, err := tru.conn.ReadFrom(buf)
 			if err != nil {
 				// log.Error.Println("ReadFrom error:", err)
-				break
+				continue
 			}
 			if n > 0 {
 				tru.serve(n, addr, buf[:n])
