@@ -41,9 +41,9 @@ type statistic struct {
 }
 
 const (
-	checkInactiveAfter      = 1 * time.Second
+	checkInactiveAfter      = 500 * time.Millisecond
 	pingInactiveAfter       = 4 * time.Second
-	disconnectInactiveAfter = 5 * time.Second
+	disconnectInactiveAfter = 6 * time.Second
 )
 
 var stathide = flag.Bool("stathide", false, "hide statistic (for debuging)")
@@ -356,7 +356,7 @@ func (tru *Tru) printStatistic(prnt bool, next ...time.Time) {
 		)
 
 		// Log with main messages
-		msglog, n := getLog(numRows + 3)
+		msglog, n := getLog(numRows + 4)
 		str += term.Func.ClearLine() + "\n"
 		str += msglog
 
