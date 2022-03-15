@@ -68,6 +68,7 @@ func (s *statistic) destroy() {
 	s.destroyed = true
 }
 
+// isDestroyed return true if channel is already destroyed
 func (s *statistic) isDestroyed() bool {
 	s.RLock()
 	defer s.RUnlock()
@@ -154,6 +155,22 @@ func (s *statistic) getSendDelay() int {
 	defer s.RUnlock()
 
 	return s.sendDelay
+}
+
+// setLastSend set channels last send time
+func (s *statistic) setLastSend(t time.Time) {
+	s.Lock()
+	defer s.Unlock()
+
+	s.lastSend = t
+}
+
+// getLastSend get channels last send time
+func (s *statistic) getLastSend() time.Time {
+	s.RLock()
+	defer s.RUnlock()
+
+	return s.lastSend
 }
 
 // checkActivity check channel activity every second and call inactive func

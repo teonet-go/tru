@@ -161,6 +161,11 @@ func (ch *Channel) Close() {
 	ch.destroy(fmt.Sprint("channel close, destroy ", ch.addr.String()))
 }
 
+// Destroyed return true if channel is already destroyed
+func (ch *Channel) Destroyed() bool {
+	return ch.stat.isDestroyed()
+}
+
 // Addr return tru channels address
 func (ch *Channel) Addr() net.Addr {
 	return ch.addr
@@ -255,7 +260,7 @@ func (ch *Channel) writeTo(data []byte, stat int, delivery []interface{}, ids ..
 			pac.SetDelivery(deliveryFunc)
 			ch.stat.setSend()
 		}
-		ch.stat.lastSend = time.Now()
+		ch.stat.setLastSend(time.Now())
 	}
 
 	// Send disconnect packet immediately
@@ -314,7 +319,7 @@ func (ch *Channel) writeToDelay(status int) {
 	}
 
 	// Execute current delay
-	if since := time.Since(ch.stat.lastSend); since < delay {
+	if since := time.Since(ch.stat.getLastSend()); since < delay {
 		time.Sleep(delay - since)
 	}
 }
