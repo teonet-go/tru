@@ -154,8 +154,10 @@ func (ch *Channel) destroy(msg string) {
 
 // Close tru channel
 func (ch *Channel) Close() {
+	if ch.stat.isDestroyed() {
+		return
+	}
 	ch.writeToDisconnect()
-	// time.Sleep(minRTT)
 	ch.destroy(fmt.Sprint("channel close, destroy ", ch.addr.String()))
 }
 
