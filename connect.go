@@ -22,7 +22,6 @@ const waitConnectionTimeout = 5 * time.Second
 const (
 	ClientConnectTimeout = waitConnectionTimeout
 	ServerConnectTimeout = waitConnectionTimeout
-	// ClientDisconnectTime = 10 * time.Millisecond
 )
 
 type connect struct {
