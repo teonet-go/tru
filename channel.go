@@ -396,7 +396,11 @@ func (ch *Channel) setTripTime(id int) (tt time.Duration, err error) {
 
 	tt = time.Since(pac.time)
 	ch.stat.tripTime = tt
-	ch.stat.tripTimeMidle = (ch.stat.tripTimeMidle*9 + tt) / 10
+	if ch.stat.tripTimeMidle != 0 {
+		ch.stat.tripTimeMidle = (ch.stat.tripTimeMidle*9 + tt) / 10
+	} else {
+		ch.stat.tripTimeMidle = tt
+	}
 
 	return
 }
