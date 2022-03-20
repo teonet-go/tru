@@ -4,3 +4,5 @@ github.com/kirill-scherba/stable v0.0.8 h1:m0GM5FCx1SJkai1o6kfQI0lKUWeupQGTicqb8
 github.com/kirill-scherba/stable v0.0.8/go.mod h1:Le2T16xIQmb9c9xzDVSqf7bWvpzo1pbDQLeD0s7qxZU=
 golang.org/x/sys v0.0.0-20220317061510-51cd9980dadf h1:Fm4IcnUL803i92qDlmB0obyHmosDrxZWxJL3gIeNqOw=
 golang.org/x/sys v0.0.0-20220317061510-51cd9980dadf/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
+golang.org/x/sys v0.0.0-20220319134239-a9b59b0215f8 h1:OH54vjqzRWmbJ62fjuhxy7AxFFgoHN0/DPc/UrL8cAs=
+golang.org/x/sys v0.0.0-20220319134239-a9b59b0215f8/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
