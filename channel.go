@@ -63,7 +63,7 @@ func (tru *Tru) newChannel(addr net.Addr, serverMode ...bool) (ch *Channel, err 
 			if ch.serverMode {
 				return
 			}
-			log.Debugvvv.Println("channel ping", ch.addr.String())
+			log.Debugvvv.Println("ping", ch.addr.String())
 			ch.writeToPing()
 		},
 	)

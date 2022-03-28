@@ -20,7 +20,7 @@ import (
 )
 
 const truName = "Teonet Reliable UDP (TRU v5)"
-const truVersion = "0.0.3"
+const truVersion = "0.0.4"
 
 // Tru connector
 type Tru struct {
@@ -347,9 +347,11 @@ func (tru *Tru) serve(n int, addr net.Addr, data []byte) {
 	switch pac.Status() {
 
 	case statusPing:
+		log.Debugvvv.Println("got ping", ch)
 		ch.writeToPong()
 
 	case statusPong:
+		log.Debugvvv.Println("got ping answer", ch)
 
 	case statusAck:
 		tt, err := ch.setTripTime(pac.ID())
