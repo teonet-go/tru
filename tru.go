@@ -243,6 +243,10 @@ func (tru *Tru) WriteTo(data []byte, addri interface{}) (addr net.Addr, err erro
 	return
 }
 
+// Hotkey return pointer to hotkey menu used in tru or nil if hotkey menu does
+// not start
+func (tru *Tru) Hotkey() *hotkey.Hotkey { return tru.hotkey }
+
 // listen to incoming udp packets
 func (tru *Tru) listen() {
 	log.Connect.Println("start listen at", tru.LocalAddr().String())
