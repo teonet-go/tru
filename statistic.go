@@ -321,15 +321,7 @@ func (tru *Tru) StatisticPrint() {
 	tru.printStatistic(!*stathide)
 }
 
-func (tru *Tru) printStatistic(prnt bool, next ...time.Time) {
-	var start time.Time
-	if len(next) == 0 {
-		// First screen
-		start = time.Now() // set start time
-	} else {
-		// Next screens
-		start = next[0] // get start time from parameter
-	}
+func (tru *Tru) printStatistic(prnt bool) {
 
 	// getLog return messages log: str - log in strung, n - number lines in log
 	var getLog = func(tableLen int) (str string, n int) {
@@ -368,7 +360,7 @@ func (tru *Tru) printStatistic(prnt bool, next ...time.Time) {
 			tru.LocalAddr().String(),
 			len(tru.readerCh),
 			len(tru.senderCh),
-			time.Since(start),
+			time.Since(tru.start),
 			table,
 		)
 
@@ -394,7 +386,6 @@ func (tru *Tru) printStatistic(prnt bool, next ...time.Time) {
 		if prnt {
 			fmt.Print(str)
 		}
-		tru.printStatistic(prnt, start) // print next frame
 	})
 }
 

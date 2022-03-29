@@ -35,6 +35,7 @@ type Tru struct {
 	sendDelay  int                 // Common send delay
 	statMsgs   statisticLog        // Statistic log messages
 	statTimer  *time.Timer         // Show statistic timer
+	start      time.Time           // Start time
 	privateKey *rsa.PrivateKey     // Common private key
 	maxDataLen int                 // Max data len in created packets, 0 - maximum UDP len
 	listenStop chan interface{}    // Tru listen wait stop channel
@@ -73,6 +74,7 @@ func New(port int, params ...interface{}) (tru *Tru, err error) {
 
 	// Create tru object
 	tru = new(Tru)
+	tru.start = time.Now()
 	tru.sendDelay = startSendDelay
 
 	// Parse parameters
