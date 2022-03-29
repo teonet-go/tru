@@ -28,6 +28,7 @@ type Hotkey struct {
 	nextKeyAction func(ch []byte)
 	state         interface{}
 	stop          bool
+	stopactions   []func()
 }
 
 type hotkeyData struct {
@@ -176,7 +177,15 @@ func (h *Hotkey) Run() *Hotkey {
 
 // Stop execute hotkey menu
 func (h *Hotkey) Stop() {
+	for _, f := range h.stopactions {
+		f()
+	}
 	h.stop = true
+}
+
+// SetStopAction set callback function which will run when hotkey menu Stop
+func (h *Hotkey) SetStopAction(f func()) {
+	h.stopactions = append(h.stopactions, f)
 }
 
 // run execute hotkey menu, wait key pressed and execute it action
