@@ -386,6 +386,7 @@ func (tru *Tru) printStatistic(prnt bool) {
 		if prnt {
 			fmt.Print(str)
 		}
+		tru.printStatistic(prnt) // print next frame
 	})
 }
 
