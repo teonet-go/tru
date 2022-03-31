@@ -80,6 +80,18 @@ func (tru *Tru) newHotkey() *hotkey.Hotkey {
 			}
 		}).
 
+		// Show or Hide tru statistic minilog
+		Add("U", "show/hide tru statistic minilog", func(h *hotkey.Hotkey) {
+			var s string
+			if tru.StatisticMinilog() {
+				s = "show"
+			} else {
+				s = "hide"
+			}
+
+			fmt.Printf(" tru statistic minilog %s\n", s)
+		}).
+
 		// Switch log level
 		Add("l", "switch logger level", func(h *hotkey.Hotkey) {
 			log.SwitchLevel()

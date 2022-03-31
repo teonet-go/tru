@@ -365,13 +365,18 @@ func (tru *Tru) printStatistic(prnt bool) {
 		)
 
 		// Log with main messages
-		msglog, n := getLog(numRows + 4)
-		str += term.Func.ClearLine() + "\n"
-		str += msglog
+		var n int
+		if tru.statMsgs.showit() {
+			var msglog string
+			msglog, n = getLog(numRows + 4)
+			str += term.Func.ClearLine() + "\n"
+			str += msglog
+			n += 1
+		}
 
 		// Footer terminal command
 		str += term.Func.ClearLine() + "\n"
-		str += term.Func.SetScrollRegion(numRows + 3 + n + 1)
+		str += term.Func.SetScrollRegion(numRows + 3 + n )
 		str += term.Func.RestoreCursorPosition()
 		str += term.Func.WrapOn()
 
@@ -402,6 +407,11 @@ func (tru *Tru) StatisticPrintStop() {
 		fmt.Print(str)
 		tru.statTimer = nil
 	}
+}
+
+// StatisticMinilog start /stop show statistic minilog
+func (tru *Tru) StatisticMinilog() bool {
+	return tru.statMsgs.showSwap()
 }
 
 // StatisticPrintRunning return true if Statistic Print running now

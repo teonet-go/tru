@@ -16,7 +16,8 @@ const totalMessages = 256 // Max number of messages in statistic log slice
 
 // statisticLog TRU statistic log module type and receiver
 type statisticLog struct {
-	msgs []string
+	msgs    []string
+	showit_ bool
 	sync.RWMutex
 }
 
@@ -47,4 +48,21 @@ func (s *statisticLog) get(i int) (msg string) {
 		return
 	}
 	return s.msgs[i]
+}
+
+// showit return flag of show minilog in statistic
+func (s *statisticLog) showit() bool {
+	s.RLock()
+	defer s.RUnlock()
+
+	return s.showit_
+}
+
+// showSwap swap flag of show minilog in statistic
+func (s *statisticLog) showSwap() bool {
+	s.Lock()
+	defer s.Unlock()
+
+	s.showit_ = !s.showit_
+	return s.showit_
 }
