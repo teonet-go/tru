@@ -33,7 +33,6 @@ func getState(fd int) (*State, error) {
 	return nil, fmt.Errorf("terminal: GetState not implemented on %s/%s", runtime.GOOS, runtime.GOARCH)
 }
 
-func restoreStatefd int, state *State) error {
+func restoreState(fd int, state *State) error {
 	return fmt.Errorf("terminal: Restore not implemented on %s/%s", runtime.GOOS, runtime.GOARCH)
 }
-

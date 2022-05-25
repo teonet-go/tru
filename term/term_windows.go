@@ -48,7 +48,6 @@ func getState(fd int) (*State, error) {
 	return &State{state{st}}, nil
 }
 
-func restoreStatefd int, state *State) error {
+func restoreState(fd int, state *State) error {
 	return windows.SetConsoleMode(windows.Handle(fd), state.mode)
 }
-
