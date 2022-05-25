@@ -20,7 +20,7 @@ import (
 )
 
 const truName = "Teonet Reliable UDP (TRU v5)"
-const truVersion = "0.0.4"
+const truVersion = "0.0.5"
 
 // Tru connector
 type Tru struct {
