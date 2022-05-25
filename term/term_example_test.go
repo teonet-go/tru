@@ -3,7 +3,7 @@ package term_test
 import (
 	"fmt"
 
-	"github.com/kirill-scherba/tru/term"
+	"github.com/teonet-go/tru/term"
 )
 
 func ExampleColor_Red() {

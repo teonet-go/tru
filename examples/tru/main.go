@@ -13,8 +13,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/kirill-scherba/tru"
-	"github.com/kirill-scherba/tru/teolog"
+	"github.com/teonet-go/tru"
+	"github.com/teonet-go/tru/teolog"
 )
 
 var port = flag.Int("p", 0, "local port number")

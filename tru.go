@@ -15,8 +15,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/kirill-scherba/tru/hotkey"
-	"github.com/kirill-scherba/tru/teolog"
+	"github.com/teonet-go/tru/hotkey"
+	"github.com/teonet-go/tru/teolog"
 )
 
 const truName = "Teonet Reliable UDP (TRU v5)"

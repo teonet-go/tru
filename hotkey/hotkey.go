@@ -19,7 +19,7 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/kirill-scherba/tru/term"
+	"github.com/teonet-go/tru/term"
 )
 
 type Hotkey struct {

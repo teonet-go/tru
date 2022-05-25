@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/kirill-scherba/tru/term"
+	"github.com/teonet-go/tru/term"
 )
 
 func main() {

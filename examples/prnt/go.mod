@@ -1,4 +1,4 @@
-module github.com/kirill-scherba/tru/example/prnt
+module github.com/teonet-go/tru/example/prnt
 
 go 1.17
 

@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kirill-scherba/tru/teolog"
+	"github.com/teonet-go/tru/teolog"
 )
 
 func TestPacketDelivery(t *testing.T) {

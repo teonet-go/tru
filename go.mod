@@ -1,4 +1,4 @@
-module github.com/kirill-scherba/tru
+module github.com/teonet-go/tru
 
 go 1.18
 

@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"github.com/kirill-scherba/stable"
-	"github.com/kirill-scherba/tru/term"
+	"github.com/teonet-go/tru/term"
 )
 
 type statistic struct {
@@ -376,7 +376,7 @@ func (tru *Tru) printStatistic(prnt bool) {
 
 		// Footer terminal command
 		str += term.Func.ClearLine() + "\n"
-		str += term.Func.SetScrollRegion(numRows + 3 + n )
+		str += term.Func.SetScrollRegion(numRows + 3 + n)
 		str += term.Func.RestoreCursorPosition()
 		str += term.Func.WrapOn()
 

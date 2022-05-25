@@ -6,7 +6,7 @@ import (
 	"os"
 	"time"
 
-	termx "github.com/kirill-scherba/tru/term"
+	termx "github.com/teonet-go/tru/term"
 )
 
 func getch() []byte {

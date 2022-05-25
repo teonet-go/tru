@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/kirill-scherba/tru/hotkey"
-	"github.com/kirill-scherba/tru/term"
+	"github.com/teonet-go/tru/hotkey"
+	"github.com/teonet-go/tru/term"
 )
 
 func main() {

@@ -3,7 +3,7 @@ package tru
 import (
 	"testing"
 
-	"github.com/kirill-scherba/tru/teolog"
+	"github.com/teonet-go/tru/teolog"
 )
 
 // Distance func test
