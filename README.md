@@ -1,6 +1,6 @@
 # TRU v5
 
-Teonet Real time communications over UDP protocol (TRU)
+[Teonet](https://github.com/teonet-go/teonet) Real time communications over UDP protocol (TRU)
 
 [![GoDoc](https://godoc.org/github.com/teonet-go/tru?status.svg)](https://godoc.org/github.com/teonet-go/tru/)
 [![Go Report Card](https://goreportcard.com/badge/github.com/teonet-go/tru)](https://goreportcard.com/report/github.com/teonet-go/tru)
