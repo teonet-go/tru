@@ -20,7 +20,7 @@ import (
 )
 
 const truName = "Teonet Reliable UDP (TRU v5)"
-const truVersion = "0.0.7"
+const truVersion = "0.0.8"
 
 // Tru connector
 type Tru struct {
@@ -501,7 +501,7 @@ func Logo(appName, appVersion string) (str string) {
 		appVersion = defVersion
 	}
 	str += logo
-	str += fmt.Sprintf("\n %s ver %s, based on %s ver %s\n",
+	str += fmt.Sprintf("\n%s ver %s, based on %s ver %s\n",
 		appName, appVersion, truName, truVersion)
 
 	return
