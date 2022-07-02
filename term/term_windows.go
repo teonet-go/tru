@@ -5,8 +5,6 @@
 package term
 
 import (
-	"os"
-
 	"golang.org/x/sys/windows"
 )
 
