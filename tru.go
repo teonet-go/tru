@@ -20,7 +20,7 @@ import (
 )
 
 const truName = "Teonet Reliable UDP (TRU v5)"
-const truVersion = "0.0.9"
+const truVersion = "0.0.10"
 
 // Tru connector
 type Tru struct {
@@ -43,8 +43,9 @@ type Tru struct {
 	mu         sync.RWMutex        // Channels map mutex
 }
 
-type Stat bool   // Parameters show statistic type
-type Hotkey bool // Parameters start hotkey menu
+type Stat bool          // Parameters show statistic type
+type Hotkey bool        // Parameters start hotkey menu
+type MaxDataLenType int // Max data length type
 
 // Lengs of readerChData and senderChData
 const (
@@ -61,15 +62,16 @@ var drop = flag.Int("drop", 0, "drop send packets")
 var ErrTruClosed = errors.New("tru listner closed")
 
 // New create new tru object and start listen udp packets. Parameters by type:
-//   int:             local port number, 0 for any
-//   tru.ReaderFunc:  message receiver callback function
-//   tru.ConnectFunc: connect to server callback function
-//	 tru.PunchFunc:   punch callback function
-//   *teolog.Teolog:  pointer to teolog
-//	 string:          loggers level
-//   teolog.Filter:   loggers filter
-//   tru.StartHotkey: start hotkey meny
-//   tru.ShowStat:    show statistic
+//   int:                local port number, 0 for any
+//   tru.ReaderFunc:     message receiver callback function
+//   tru.ConnectFunc:    connect to server callback function
+//   tru.PunchFunc:      punch callback function
+//   *teolog.Teolog:     pointer to teolog
+//   string:             loggers level
+//   teolog.Filter:      loggers filter
+//   tru.StartHotkey:    start hotkey meny
+//   tru.ShowStat:       show statistic
+//   tru.MaxDataLenType: max packet data length
 func New(port int, params ...interface{}) (tru *Tru, err error) {
 
 	// Create tru object
@@ -128,6 +130,10 @@ func New(port int, params ...interface{}) (tru *Tru, err error) {
 		// Private key
 		case *rsa.PrivateKey:
 			// TODO: set private key
+
+		// Set max data length
+		case MaxDataLenType:
+			tru.maxDataLen = int(v)
 
 		// Wrong parameter
 		default:

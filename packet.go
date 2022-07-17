@@ -31,8 +31,8 @@ const (
 )
 
 const (
-	maxUdpDataLength = 65527 // Max packet 65535 - 8 byte header
-	cryptAesLength   = 28    // AES crypt delete from max len packet data
+	maxUdpDataLength = 65535 - 8 // Max packet 65535 - 8 byte header
+	cryptAesLength   = 28        // AES crypt delete from max len packet data
 )
 
 const packetIDLimit = 0x100000          // Number of packets id (max number + 1)
