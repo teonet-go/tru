@@ -76,7 +76,7 @@ func Reader(ch *tru.Channel, pac *tru.Packet, err error) (processed bool) {
 		log.Debug.Println("got error in main reader:", err)
 		return
 	}
-	log.Debugv.Printf("got %d byte from %s, id %d: %s\n", pac.Len(), ch.Addr().String(), pac.ID(), pac.Data())
+	log.Debugv.Printf("got %d byte from %s, id %d, data len: %d\n", pac.Len(), ch.Addr().String(), pac.ID(), len(pac.Data()))
 	ch.WriteTo(append([]byte("answer to "), pac.Data()...))
 	return
 }
