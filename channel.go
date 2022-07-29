@@ -67,9 +67,10 @@ func (tru *Tru) newChannel(addr net.Addr, serverMode ...bool) (ch *Channel, err 
 			ch.writeToPing()
 		},
 	)
-	// if !ch.serverMode {
+	// Set default send delay in client mode
+	if !ch.serverMode {
 		ch.stat.sendDelay = tru.sendDelay
-	// }
+	}
 	tru.channels[addr.String()] = ch
 
 	// Channel connect to server callback
@@ -284,11 +285,9 @@ func (ch *Channel) writeTo(data []byte, stat int, delivery []interface{}, ids ..
 
 // writeToDelay calculate and execute delay for client mode data packets
 func (ch *Channel) writeToDelay(status int) {
-	// if !(!ch.serverMode && status == statusData) {
-	// 	return
-	// }
 
-	if !(status == statusData) {
+	// Use client mode data packages only
+	if !(!ch.serverMode && status == statusData) {
 		return
 	}
 

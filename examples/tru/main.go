@@ -25,7 +25,7 @@ var stat = flag.Bool("stat", false, "print statistic")
 var hotkey = flag.Bool("hotkey", false, "start hotkey menu")
 var delay = flag.Int("delay", 0, "send delay in Microseconds")
 var sendlen = flag.Int("sendlen", 0, "send packet data length")
-var datalen = flag.Int("datalen", 0, "set max data len in created packets, 0 - maximum UDP len")
+var datalen = flag.Int("datalen", 1024, "set max data len in created packets, 0 - maximum UDP len")
 
 var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to `file`")
 var memprofile = flag.String("memprofile", "", "write memory profile to `file`")
