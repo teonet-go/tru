@@ -15,8 +15,8 @@ import (
 	"time"
 )
 
-// TruNet is receiver to create Tru net.Listener interface
-type TruNet struct {
+// Trunet is receiver to create Tru net.Listener interface
+type Trunet struct {
 	*Tru
 	accept acceptChannel
 }
@@ -47,8 +47,8 @@ func Dial(network, address string) (conn net.Conn, err error) {
 }
 
 // newTrunet creates new Trunet object
-func newTrunet(address string) (trunet *TruNet, err error) {
-	trunet = new(TruNet)
+func newTrunet(address string) (trunet *Trunet, err error) {
+	trunet = new(Trunet)
 
 	addr := strings.Split(address, ":")
 	if len(addr) != 2 {
@@ -66,7 +66,6 @@ func newTrunet(address string) (trunet *TruNet, err error) {
 	return
 }
 
-
 // reader reads packets from connected peers
 func (conn *Conn) reader(ch *Channel, pac *Packet, err error) (processed bool) {
 	if conn.ch == nil {
@@ -76,17 +75,15 @@ func (conn *Conn) reader(ch *Channel, pac *Packet, err error) (processed bool) {
 	if err != nil {
 		if err == ErrChannelDestroyed {
 			err = conn.Close()
-			// if err != nil {
-			// 	return
-			// }
+			if err != nil {
+				return
+			}
 			log.Info.Println("channel destroyed:", conn.RemoteAddr())
 			return
 		}
 		log.Info.Println("got error in reader:", err)
 		return
 	}
-	// log.Info.Printf("got %d byte from %s, id %d, data len: %d\n",
-	// 	pac.Len(), ch.Addr().String(), pac.ID(), len(pac.Data()))
 
 	defer func() {
 		if err := recover(); err != nil {
@@ -100,21 +97,20 @@ func (conn *Conn) reader(ch *Channel, pac *Packet, err error) (processed bool) {
 }
 
 // connected to tru callback function
-func (t TruNet) connected(ch *Channel, err error) {
+func (t Trunet) connected(ch *Channel, err error) {
 	if err != nil {
 		return
 	}
-	// log.Info.Println("channel connected", ch, err)
 	t.accept <- ch
 }
 
 // Create new Conn object
-func (t TruNet) newConn(ch *Channel) *Conn {
+func (t Trunet) newConn(ch *Channel) *Conn {
 	return &Conn{ch, t.LocalAddr(), ch.Addr(), connRead{ch: make(connReadChan)}}
 }
 
 // Accept waits for and returns the next connection to the listener.
-func (t TruNet) Accept() (conn net.Conn, err error) {
+func (t Trunet) Accept() (conn net.Conn, err error) {
 	ch := <-t.accept
 	c := t.newConn(ch)
 	ch.setReader(c.reader)
@@ -124,13 +120,13 @@ func (t TruNet) Accept() (conn net.Conn, err error) {
 
 // Close closes the listener.
 // Any blocked Accept operations will be unblocked and return errors.
-func (t TruNet) Close() (err error) {
+func (t Trunet) Close() (err error) {
 	t.Tru.Close()
 	return
 }
 
 // Addr returns the listener's network address.
-func (t TruNet) Addr() (addr net.Addr) { return }
+func (t Trunet) Addr() (addr net.Addr) { return }
 
 // Conn is a generic stream-oriented network connection.
 //
@@ -148,11 +144,6 @@ type connRead struct {
 }
 type connReadChan chan connReadChanData
 type connReadChanData []byte
-
-// type connReadChanData struct {
-// 	data []byte
-// 	err  error
-// }
 
 // Read reads data from the connection.
 // Read can be made to time out and return an error after a fixed
@@ -174,10 +165,6 @@ func (c *Conn) Read(b []byte) (n int, err error) {
 			err = ErrChannelDestroyed // channed destroed and connection closed
 			return
 		}
-		// if chanData.err != nil {
-		// 	err = chanData.err
-		// 	return
-		// }
 		c.read.buf = chanData
 		c.read.cont = true
 	}
@@ -261,15 +248,3 @@ func (c Conn) SetReadDeadline(t time.Time) (err error) { return }
 // some of the data was successfully written.
 // A zero value for t means Write will not time out.
 func (c Conn) SetWriteDeadline(t time.Time) (err error) { return }
-
-// Addr represents a network end point address.
-//
-// The two methods Network and String conventionally return strings
-// that can be passed as the arguments to Dial, but the exact form
-// and meaning of the strings is up to the implementation.
-// type Addr struct {
-// 	ch *Channel
-// }
-
-// func (a Addr) Network() string { return "udp" }         // name of the network (for example, "tcp", "udp")
-// func (a Addr) String() string  { return a.ch.String() } // string form of address (for example, "192.0.2.1:25", "[2001:db8::1]:80")
