@@ -125,6 +125,11 @@ func (tru *Tru) WriteToPunch(data []byte, addri interface{}) (addr net.Addr, err
 	return tru.WriteTo(data, addri)
 }
 
+// setReader sets channels reafer
+func (ch *Channel) setReader(reader ReaderFunc) {
+	ch.reader = reader
+}
+
 // destroy destroy channel
 func (ch *Channel) destroy(msg string) {
 	if ch == nil {
