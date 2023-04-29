@@ -3,24 +3,60 @@ package main
 
 import (
 	"bytes"
+	"flag"
+	"fmt"
 	"io"
 	"log"
 	"net"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"github.com/teonet-go/tru"
 )
 
+const protocol = "tru"
+
+var addr = flag.String("addr", ":7070", "local address")
+var conn = flag.String("a", "", "remote address to connect to")
+var delay = flag.Int("delay", 0, "send delay in Microseconds")
+var nomsg = flag.Bool("nomsg", false, "dont show send receive messages")
+
 func main() {
 
+	// Print logo message
+	fmt.Println("Trunet sample application ver. 0.0.1")
+
+	// Parse flags
+	flag.Parse()
+
+	// Run client
+	if len(*conn) > 0 {
+		client(*conn)
+		return
+	}
+
+	// Run server
+	server(*addr)
+}
+
+// Trunet server
+func server(addr string) (err error) {
+
 	// Listen announces on the local network address.
-	addr := "localhost:7070"
-	listener, err := tru.Listen("tru", addr)
+	listener, err := tru.Listen(protocol, addr)
 	if err != nil {
 		log.Println("can't start tru listner, error: ", err)
+		return
 	}
-	log.Println("start listening at addr", addr)
+	log.Println("start listening at addr:", addr)
 
-	// select {}
+	// Graceful exit from application when Ctrl+C pressed
+	onCtrlCPressed(func() {
+		listener.Close()
+		os.Exit(0)
+	})
 
 	for {
 		// Accept an incoming connection.
@@ -28,7 +64,7 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
-		log.Println("new connection from:", conn.RemoteAddr())
+		log.Println("new connection from addr:", conn.RemoteAddr())
 
 		// Handle the connection in a separate goroutine.
 		go func(conn net.Conn) {
@@ -39,28 +75,85 @@ func main() {
 
 				// Read data from the connection.
 				_, err := io.Copy(buf, conn)
-				// _, err := io.ReadAll(conn)
 				if err != nil {
 					log.Println("got error:", err)
 					break
 				}
-				// log.Printf("got %s command: %s", conn.RemoteAddr().Network(), buf.String())
-
-				// Execute command
-				// res, err := u.command.Exec(buf.Bytes())
-				// if err != nil {
-				// 	res = []byte(fmt.Sprintf("error: %s\n\nUsage of commands:\n%s", err, u.command))
-				// }
-				res := []byte("done")
+				logmsg("got message:", buf.Bytes())
 
 				// Send command answer to the connection.
+				res := []byte(fmt.Sprintf("done: %s", buf))
 				_, err = conn.Write(res)
 				if err != nil {
 					log.Println(err)
 				}
-				// log.Printf("send %s command answer, bytes len: %d", conn.RemoteAddr().Network(), len(res))
+				logmsg("send answer:", res)
+
 			}
-			log.Println("connection closed from:", conn.RemoteAddr())
+			log.Println("connection closed from addr:", conn.RemoteAddr())
 		}(conn)
 	}
+}
+
+// Trunet client
+func client(addr string) (err error) {
+
+	// Dial to server and send messages during connection
+	for {
+		// Connect to server
+		conn, err := tru.Dial(protocol, addr)
+		if err != nil {
+			log.Println("can't tru dial, error:", err)
+			time.Sleep(time.Second * 5)
+			continue
+		}
+		log.Println("connected to addr:", addr)
+
+		// Graceful exit from application when Ctrl+C pressed
+		onCtrlCPressed(func() {
+			conn.Close()
+			os.Exit(0)
+		})
+
+		// Send messages while connected
+		for i := 0; ; i++ {
+			data := []byte(fmt.Sprintf("Hello message # %d", i))
+			_, err := conn.Write(data)
+			if err != nil {
+				log.Println("write err:", err)
+				break
+			}
+			logmsg("send message:", data)
+
+			data, err = io.ReadAll(conn)
+			if err != nil {
+				log.Println("read err:", err)
+				break
+			}
+			logmsg("got answer:", data)
+
+			time.Sleep(time.Microsecond * time.Duration(*delay))
+		}
+		log.Println("connection closed to addr:", conn.RemoteAddr())
+		conn.Close()
+	}
+}
+
+// Show log message depend of nomsg parameter
+func logmsg(msg string, data []byte) {
+	if !*nomsg {
+		log.Println(msg, string(data))
+	}
+}
+
+// React to Ctrl+C
+func onCtrlCPressed(f func()) {
+	go func() {
+		c := make(chan os.Signal, 1)
+		signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+		for range c {
+			// sig is a ^C, handle it
+			f()
+		}
+	}()
 }
