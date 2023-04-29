@@ -1,8 +1,8 @@
 package tru
 
 import (
+	"crypto/rand"
 	"fmt"
-	"math/rand"
 	"reflect"
 	"testing"
 	"time"
