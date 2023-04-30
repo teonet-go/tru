@@ -83,14 +83,14 @@ func (conn *Conn) reader(ch *Channel, pac *Packet, err error) (processed bool) {
 			// tru channel destroyed, connection closed
 			return
 		}
-		// Some other errors (I think it never happends)
+		// Some other errors (I think it never happens)
 		log.Error.Println("got error in reader:", err)
 		return
 	}
 
 	defer func() {
 		if err := recover(); err != nil {
-			// This error happends if users aplication don't read data messages
+			// This error happens if users application don't read data messages
 			// sent to it, when connection closed.
 			log.Debugvv.Println("send on closed channel panic occurred:", err)
 		}
@@ -144,7 +144,7 @@ type Conn struct {
 }
 type connRead struct {
 	ch   connReadChan // Read channel receive data form tru channel reader
-	buf  []byte       // Read data wich was not send in previuse call
+	buf  []byte       // Read data which was not send in previuse call
 	cont bool         // Need send os.EOF
 }
 type connReadChan chan connReadChanData

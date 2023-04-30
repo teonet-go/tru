@@ -315,7 +315,7 @@ func (cs *ChannelsStatistic) NumRows() (numRows int) {
 	return
 }
 
-// StatisticPrint print tru statistics continously
+// StatisticPrint print tru statistics continuously
 func (tru *Tru) StatisticPrint() {
 	tru.printStatistic(!*stathide)
 }

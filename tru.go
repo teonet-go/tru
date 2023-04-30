@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// TRU is new teonet releible udp go packge
+// TRU is new teonet releible udp go package
 package tru
 
 import (

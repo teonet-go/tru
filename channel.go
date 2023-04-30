@@ -178,7 +178,7 @@ func (ch *Channel) Addr() net.Addr {
 	return ch.addr
 }
 
-// String return channels addres in string
+// String return channels address in string
 func (ch *Channel) String() string {
 	return ch.Addr().String()
 }
@@ -357,7 +357,7 @@ func (ch *Channel) writeToDisconnect() (err error) {
 	return
 }
 
-// writeToSender write packet to sender proccess channel
+// writeToSender write packet to sender process channel
 func (ch *Channel) writeToSender(pac *Packet) {
 	ch.tru.senderCh <- senderChData{ch, pac}
 }
