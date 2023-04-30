@@ -62,7 +62,7 @@ func newTrunet(address string) (trunet *Trunet, err error) {
 	}
 
 	trunet.accept = make(acceptChannel)
-	trunet.Tru, err = New(port, trunet.connected, "Info", Stat(true))
+	trunet.Tru, err = New(port, trunet.connected, logLevel, Stat(showStats))
 	return
 }
 
@@ -72,22 +72,27 @@ func (conn *Conn) reader(ch *Channel, pac *Packet, err error) (processed bool) {
 		return
 	}
 
+	// Check channel destroyed and close Conn (connection)
 	if err != nil {
 		if err == ErrChannelDestroyed {
 			err = conn.Close()
 			if err != nil {
+				// if connection already closed
 				return
 			}
-			log.Info.Println("channel destroyed:", conn.RemoteAddr())
+			// tru channel destroyed, connection closed
 			return
 		}
-		log.Info.Println("got error in reader:", err)
+		// Some other errors (I think it never happends)
+		log.Error.Println("got error in reader:", err)
 		return
 	}
 
 	defer func() {
 		if err := recover(); err != nil {
-			log.Info.Println("panic occurred:", err)
+			// This error happends if users aplication don't read data messages
+			// sent to it, when connection closed.
+			log.Debugvv.Println("send on closed channel panic occurred:", err)
 		}
 	}()
 
@@ -161,8 +166,8 @@ func (c *Conn) Read(b []byte) (n int, err error) {
 	if len(c.read.buf) == 0 {
 		chanData, ok := <-c.read.ch
 		if !ok {
-			log.Info.Println("read channel closed")
-			err = ErrChannelDestroyed // channed destroed and connection closed
+			// Read channel closed
+			err = ErrChannelDestroyed
 			return
 		}
 		c.read.buf = chanData

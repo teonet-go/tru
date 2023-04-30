@@ -20,7 +20,7 @@ const protocol = "tru"
 
 var addr = flag.String("addr", ":7070", "local address")
 var conn = flag.String("a", "", "remote address to connect to")
-var delay = flag.Int("delay", 0, "send delay in Microseconds")
+var delay = flag.Int("delay", 2000000, "send delay in Microseconds")
 var nomsg = flag.Bool("nomsg", false, "dont show send receive messages")
 
 func main() {
@@ -44,6 +44,9 @@ func main() {
 // Trunet server
 func server(addr string) (err error) {
 
+	// Server mode logo
+	fmt.Println("Server mode")
+
 	// Listen announces on the local network address.
 	listener, err := tru.Listen(protocol, addr)
 	if err != nil {
@@ -53,7 +56,7 @@ func server(addr string) (err error) {
 	log.Println("start listening at addr:", addr)
 
 	// Graceful exit from application when Ctrl+C pressed
-	onCtrlCPressed(func() {
+	onControlCPressed(func() {
 		listener.Close()
 		os.Exit(0)
 	})
@@ -98,6 +101,17 @@ func server(addr string) (err error) {
 // Trunet client
 func client(addr string) (err error) {
 
+	// Client mode logo
+	fmt.Print("Client mode")
+
+	// Calculate send delay depent of -delay application parameter
+	sendDelay := time.Microsecond * time.Duration(*delay)
+	if *delay > 0 {
+		fmt.Printf(", set send delay: %v\n", sendDelay)
+	} else {
+		fmt.Println()
+	}
+
 	// Dial to server and send messages during connection
 	for {
 		// Connect to server
@@ -110,7 +124,7 @@ func client(addr string) (err error) {
 		log.Println("connected to addr:", addr)
 
 		// Graceful exit from application when Ctrl+C pressed
-		onCtrlCPressed(func() {
+		onControlCPressed(func() {
 			conn.Close()
 			os.Exit(0)
 		})
@@ -132,7 +146,7 @@ func client(addr string) (err error) {
 			}
 			logmsg("got answer:", data)
 
-			time.Sleep(time.Microsecond * time.Duration(*delay))
+			time.Sleep(sendDelay)
 		}
 		log.Println("connection closed to addr:", conn.RemoteAddr())
 		conn.Close()
@@ -147,7 +161,7 @@ func logmsg(msg string, data []byte) {
 }
 
 // React to Ctrl+C
-func onCtrlCPressed(f func()) {
+func onControlCPressed(f func()) {
 	go func() {
 		c := make(chan os.Signal, 1)
 		signal.Notify(c, os.Interrupt, syscall.SIGTERM)
