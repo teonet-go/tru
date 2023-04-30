@@ -7,8 +7,8 @@
 //
 // The Getch function is the most interesting:
 //
-// 	fmt.Println("Press any key to continue...")
-// 	term.Getch()
+//	fmt.Println("Press any key to continue...")
+//	term.Getch()
 //
 // See the getch example.
 package term

@@ -7,8 +7,8 @@
 //
 // Function Add is the most common requirement:
 //
-// 	h := hotkey.New()
-// 	h.Add("H", func() { fmt.Println("This is Help") })
+//	h := hotkey.New()
+//	h.Add("H", func() { fmt.Println("This is Help") })
 //
 // Note that on non-Unix systems os.Stdin.Fd() may not be 0 and Getch() may run
 // incorrectly
@@ -93,9 +93,7 @@ func (h *Hotkey) Add(keys interface{}, description string, action func(h *Hotkey
 	case KeyCode:
 		keysAr = append(keysAr, v)
 	case []KeyCode:
-		for i := range v {
-			keysAr = append(keysAr, v[i])
-		}
+		keysAr = append(keysAr, v...)
 	default:
 		err := errors.New("wrong type of letters parameter")
 		panic(err)

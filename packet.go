@@ -63,12 +63,11 @@ func (tru *Tru) newPacket() *Packet {
 
 // MarshalBinary marshal packet
 //
-//   Bynary packet structure:
-//   +--------------------+------+
-//   | ID & STATUS uint32 | DATA |
-//   +--------------------+------+
-//   ID & STATUS uint32: STATUS 1 byte | ID 3 byte
-//
+//	Bynary packet structure:
+//	+--------------------+------+
+//	| ID & STATUS uint32 | DATA |
+//	+--------------------+------+
+//	ID & STATUS uint32: STATUS 1 byte | ID 3 byte
 func (p *Packet) MarshalBinary() (out []byte, err error) {
 	buf := new(bytes.Buffer)
 	le := binary.LittleEndian

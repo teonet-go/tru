@@ -2,4 +2,4 @@
 
 package tru
 
-const showStats = false  // Show Tru statistics (used for debugging)
+const showStats = false // Show Tru statistics (used for debugging)
