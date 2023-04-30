@@ -33,6 +33,7 @@ type Channel struct {
 // const MaxUint16 = ^uint16(0)
 
 var ErrChannelDestroyed = errors.New("channel destroyed")
+var ErrChannelAlreadyDestroyed = errors.New("channel already destroyed")
 
 // NewChannel create new tru channel by address
 func (tru *Tru) newChannel(addr net.Addr, serverMode ...bool) (ch *Channel, err error) {
@@ -123,6 +124,11 @@ func (tru *Tru) WriteToPunch(data []byte, addri interface{}) (addr net.Addr, err
 		return
 	}
 	return tru.WriteTo(data, addri)
+}
+
+// setReader sets channels reafer
+func (ch *Channel) setReader(reader ReaderFunc) {
+	ch.reader = reader
 }
 
 // destroy destroy channel
