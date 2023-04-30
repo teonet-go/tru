@@ -293,7 +293,6 @@ func (cs *ChannelsStatistic) String(cleanLine ...bool) string {
 		Formats(formats...)
 	if numRows > 1 {
 		st.Totals(&ChannelStatistic{}, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1)
-		numRows = 1
 	}
 	if len(cleanLine) > 0 && cleanLine[0] {
 		st.CleanLine()
