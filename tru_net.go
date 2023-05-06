@@ -65,8 +65,11 @@ func newTrunet(address string, useTruCommon bool) (trunet *Trunet, err error) {
 		return
 	}
 
+	// Make accept golan channel
+	trunet.accept = make(acceptChannel)
+
 	// Create new tru object or use existing
-	var truObj = truCommon
+	var truObj *Tru = truCommon
 	if !useTruCommon || truObj == nil {
 		truObj, err = New(port, trunet.connected, logLevel, Stat(showStats))
 		if err != nil {
@@ -78,7 +81,6 @@ func newTrunet(address string, useTruCommon bool) (trunet *Trunet, err error) {
 		}
 	}
 	trunet.Tru = truObj
-	trunet.accept = make(acceptChannel)
 
 	return
 }
