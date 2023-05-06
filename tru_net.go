@@ -22,16 +22,19 @@ type Trunet struct {
 }
 type acceptChannel chan *Channel
 
+// Common tru object
+var truCommon *Tru
+
 // Listener is a tru generic network listener for stream-oriented protocols.
 func Listen(network, address string) (listener net.Listener, err error) {
-	listener, err = newTrunet(address)
+	listener, err = newTrunet(address, true)
 	return
 }
 
 // Dial connects to the address on the tru network
 func Dial(network, address string) (conn net.Conn, err error) {
 
-	trunet, err := newTrunet(":0")
+	trunet, err := newTrunet(":0", true)
 	if err != nil {
 		return
 	}
@@ -47,9 +50,10 @@ func Dial(network, address string) (conn net.Conn, err error) {
 }
 
 // newTrunet creates new Trunet object
-func newTrunet(address string) (trunet *Trunet, err error) {
+func newTrunet(address string, useTruCommon bool) (trunet *Trunet, err error) {
 	trunet = new(Trunet)
 
+	// Parse the address and get port value
 	addr := strings.Split(address, ":")
 	if len(addr) != 2 {
 		err = fmt.Errorf("wrong address: %s", address)
@@ -61,8 +65,21 @@ func newTrunet(address string) (trunet *Trunet, err error) {
 		return
 	}
 
+	// Create new tru object or use existing
+	var truObj = truCommon
+	if !useTruCommon || truObj == nil {
+		truObj, err = New(port, trunet.connected, logLevel, Stat(showStats))
+		if err != nil {
+			err = fmt.Errorf("can't create new tru object, error: %s", err)
+			return
+		}
+		if useTruCommon {
+			truCommon = truObj
+		}
+	}
+	trunet.Tru = truObj
 	trunet.accept = make(acceptChannel)
-	trunet.Tru, err = New(port, trunet.connected, logLevel, Stat(showStats))
+
 	return
 }
 

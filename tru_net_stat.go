@@ -1,4 +1,4 @@
-//go:build stat
+//go:build truStat
 
 package tru
 
