@@ -12,6 +12,7 @@ import (
 	"net"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -23,7 +24,10 @@ type Trunet struct {
 type acceptChannel chan *Channel
 
 // Common tru object
-var truCommon *Tru
+var truCommon struct {
+	*Tru
+	sync.Mutex
+}
 
 // Listener is a tru generic network listener for stream-oriented protocols.
 func Listen(network, address string) (listener net.Listener, err error) {
@@ -69,7 +73,9 @@ func newTrunet(address string, useTruCommon bool) (trunet *Trunet, err error) {
 	trunet.accept = make(acceptChannel)
 
 	// Create new tru object or use existing
-	var truObj *Tru = truCommon
+	truCommon.Lock()
+	defer truCommon.Unlock()
+	var truObj = truCommon.Tru
 	if !useTruCommon || truObj == nil {
 		truObj, err = New(port, trunet.connected, logLevel, Stat(showStats))
 		if err != nil {
@@ -77,7 +83,7 @@ func newTrunet(address string, useTruCommon bool) (trunet *Trunet, err error) {
 			return
 		}
 		if useTruCommon {
-			truCommon = truObj
+			truCommon.Tru = truObj
 		}
 	}
 	trunet.Tru = truObj
