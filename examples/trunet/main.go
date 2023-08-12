@@ -129,6 +129,18 @@ func client(addr string) (err error) {
 			os.Exit(0)
 		})
 
+		// Read answers from client
+		go func() {
+			for {
+				data, err := io.ReadAll(conn)
+				if err != nil {
+					log.Println("read err:", err)
+					break
+				}
+				logmsg("got answer:", data)
+			}
+		}()
+
 		// Send messages while connected
 		for i := 0; ; i++ {
 			data := []byte(fmt.Sprintf("Hello message # %d", i))
@@ -139,15 +151,16 @@ func client(addr string) (err error) {
 			}
 			logmsg("send message:", data)
 
-			data, err = io.ReadAll(conn)
-			if err != nil {
-				log.Println("read err:", err)
-				break
-			}
-			logmsg("got answer:", data)
+			// data, err = io.ReadAll(conn)
+			// if err != nil {
+			// 	log.Println("read err:", err)
+			// 	break
+			// }
+			// logmsg("got answer:", data)
 
 			time.Sleep(sendDelay)
 		}
+
 		log.Println("connection closed to addr:", conn.RemoteAddr())
 		conn.Close()
 	}
