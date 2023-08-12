@@ -21,7 +21,8 @@ const protocol = "tru"
 var addr = flag.String("addr", ":7070", "local address")
 var conn = flag.String("a", "", "remote address to connect to")
 var delay = flag.Int("delay", 2000000, "send delay in Microseconds")
-var nomsg = flag.Bool("nomsg", false, "dont show send receive messages")
+var nomsg = flag.Bool("nomsg", false, "don't show send receive messages")
+var nowait = flag.Bool("nowait", false, "don't wait for answers in client")
 
 func main() {
 
@@ -130,16 +131,18 @@ func client(addr string) (err error) {
 		})
 
 		// Read answers from client
-		go func() {
-			for {
-				data, err := io.ReadAll(conn)
-				if err != nil {
-					log.Println("read err:", err)
-					break
+		if *nowait {
+			go func() {
+				for {
+					data, err := io.ReadAll(conn)
+					if err != nil {
+						log.Println("read err:", err)
+						break
+					}
+					logmsg("got answer:", data)
 				}
-				logmsg("got answer:", data)
-			}
-		}()
+			}()
+		}
 
 		// Send messages while connected
 		for i := 0; ; i++ {
@@ -151,12 +154,14 @@ func client(addr string) (err error) {
 			}
 			logmsg("send message:", data)
 
-			// data, err = io.ReadAll(conn)
-			// if err != nil {
-			// 	log.Println("read err:", err)
-			// 	break
-			// }
-			// logmsg("got answer:", data)
+			if !*nowait {
+				data, err = io.ReadAll(conn)
+				if err != nil {
+					log.Println("read err:", err)
+					break
+				}
+				logmsg("got answer:", data)
+			}
 
 			time.Sleep(sendDelay)
 		}
