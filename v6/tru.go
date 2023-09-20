@@ -187,9 +187,6 @@ func (c *truPacketConn) ReadFrom(p []byte) (n int, addr net.Addr, err error) {
 				// TODO: Set channel drop statistic
 				// ch.stat.setDrop()
 
-				// Continue reading
-				// return c.ReadFrom(p)
-
 			// Packet with id more than expectedID placed to receive queue and wait
 			// previouse packets
 			case dist > 0:
@@ -202,8 +199,6 @@ func (c *truPacketConn) ReadFrom(p []byte) (n int, addr net.Addr, err error) {
 					// TODO: Set channel drop statistic
 					// ch.stat.setDrop()
 				}
-				// Continue reading
-				// return c.ReadFrom(p)
 
 			// Valid data packet received (id == expectedID)
 			case dist == 0:
@@ -218,15 +213,11 @@ func (c *truPacketConn) ReadFrom(p []byte) (n int, addr net.Addr, err error) {
 		case pAnswer:
 			// Save answer statistic, calculate triptime and remove package from
 			// send queue
-			// if ch != nil {
 			ch.setLastdata()
 			ch.incAnswer()
 			if pac, ok := ch.sq.del(header.id); ok {
 				ch.calcTriptime(pac)
 			}
-			// }
-			// Continue reading
-			// return c.ReadFrom(p)
 
 		// Ping received
 		case pPing:
@@ -256,8 +247,10 @@ func (c *truPacketConn) WriteTo(p []byte, addr net.Addr) (n int, err error) {
 
 	// Get new packet id and create packet header
 	id := ch.newId()
-	header := headerPacket{id, 0}
-	data, _ := header.MarshalBinary()
+	data, err := headerPacket{id, pData}.MarshalBinary()
+	if err != nil {
+		return
+	}
 	data = append(data, p...)
 
 	// Wait until send avalable
