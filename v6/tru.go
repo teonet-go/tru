@@ -3,10 +3,11 @@ package tru
 import (
 	"fmt"
 	"net"
-	"slices"
 	"sync"
 	"time"
 )
+
+const errCantCreateChannel = "can't create tru channel: %s"
 
 type Tru struct {
 	chm channels
@@ -59,24 +60,41 @@ func (tru *Tru) GetChannel(addr net.Addr) *Channel {
 }
 
 // newChannel creates new Tru channel with addr or return existing
-func (tru *Tru) newChannel(conn net.PacketConn, addr net.Addr) *Channel {
+func (tru *Tru) newChannel(conn net.PacketConn, addr net.Addr) (ch *Channel, err error) {
 	tru.Lock()
 	defer tru.Unlock()
 
+	// Get string address
 	addrStr := addr.String()
 
+	// CHeck channel exists and return existing channel
 	if ch, ok := tru.chm[addrStr]; ok {
-		return ch
+		return ch, nil
 	}
 
-	ch, err := newChannel(conn, addrStr)
+	// Create new channel and add it to channels map
+	ch, err = newChannel(conn, addrStr, func() { ch.disconnected = true; tru.delChannel(ch) })
 	if err != nil {
-		return nil
+		return nil, err
 	}
-
 	tru.chm[addrStr] = ch
 
-	return ch
+	return
+}
+
+// delChannel removes selected Tru channel or return error if does not exist
+func (tru *Tru) delChannel(ch *Channel) error {
+	tru.Lock()
+	defer tru.Unlock()
+
+	addr := ch.addr.String()
+	if _, ok := tru.chm[addr]; !ok {
+		return fmt.Errorf("channel does not exists")
+	}
+
+	ch.disconnected = true
+	delete(tru.chm, addr)
+	return nil
 }
 
 // getFromReceiveQueue gets saved packet with expected id from receive queue on
@@ -137,10 +155,15 @@ func (c *truPacketConn) ReadFrom(p []byte) (n int, addr net.Addr, err error) {
 		}
 
 		// Get or create channel
-		ch := c.tru.GetChannel(addr)
-		if ch == nil {
-			ch = c.tru.newChannel(c.conn, addr)
+		var ch *Channel
+		ch, err = c.tru.newChannel(c.conn, addr)
+		if err != nil {
+			err = fmt.Errorf(errCantCreateChannel, err)
+			return
 		}
+
+		// Set last packet received time
+		ch.setLastpacket()
 
 		// Send tru answer or process answer depend of header type
 		switch header.ptype {
@@ -170,7 +193,8 @@ func (c *truPacketConn) ReadFrom(p []byte) (n int, addr net.Addr, err error) {
 			case dist > 0:
 				_, ok := ch.rq.get(header.id)
 				if !ok {
-					data := slices.Clone(p[:n])
+					// data := slices.Clone(p[:n])
+					data := append([]byte{}, p[:n]...)
 					ch.rq.add(header.id, data)
 				} else {
 					// TODO: Set channel drop statistic
@@ -203,6 +227,8 @@ func (c *truPacketConn) ReadFrom(p []byte) (n int, addr net.Addr, err error) {
 
 		// Ping received
 		case pPing:
+			data, _ := headerPacket{0, pPong}.MarshalBinary()
+			c.conn.WriteTo(data, addr)
 
 		// pPong (ping answer) received
 		case pPong:
@@ -210,25 +236,30 @@ func (c *truPacketConn) ReadFrom(p []byte) (n int, addr net.Addr, err error) {
 	}
 }
 
+// WriteTo writes a packet with payload p to addr.
+// WriteTo can be made to time out and return an Error after a
+// fixed time limit; see SetDeadline and SetWriteDeadline.
+// On packet-oriented connections, write timeouts are rare.
 func (c *truPacketConn) WriteTo(p []byte, addr net.Addr) (n int, err error) {
 
-	ch := c.tru.GetChannel(addr)
-	if ch == nil {
-		ch = c.tru.newChannel(c.conn, addr)
-		if ch == nil {
-			err = fmt.Errorf("can't create new tru channel: %v", addr)
-			return
-		}
-		// fmt.Println("new send channel", ch.addr)
+	// Get or create tru channel
+	var ch *Channel
+	ch, err = c.tru.newChannel(c.conn, addr)
+	if err != nil {
+		err = fmt.Errorf(errCantCreateChannel, err)
+		return
 	}
 
+	// Get new packet id and create packet header
 	id := ch.newId()
 	header := headerPacket{id, 0}
 	data, _ := header.MarshalBinary()
 	data = append(data, p...)
 
+	// Wait until send avalable
 	ch.sq.writeDelay()
 
+	// Write to udp
 	n, err = c.conn.WriteTo(data, addr)
 	n -= headerLen
 

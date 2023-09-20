@@ -3,6 +3,7 @@ package tru
 import (
 	"container/list"
 	"fmt"
+	"net"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -154,7 +155,11 @@ func (sq *sendQueue) writeDelay() {
 }
 
 // process send queue
-func (sq *sendQueue) process(ch *Channel) {
+func (sq *sendQueue) process(conn net.PacketConn, ch *Channel) {
+	if ch.disconnected {
+		return
+	}
+
 	var tt = ch.Triptime()
 	const extraTime = 10 * time.Millisecond
 	for el := sq.front(); el != nil; el = sq.next(el) {
@@ -172,10 +177,11 @@ func (sq *sendQueue) process(ch *Channel) {
 		}
 
 		// Retransmit package
-		ch.conn.WriteTo(sqd.data, ch.addr)
+		conn.WriteTo(sqd.data, ch.addr)
 		sqd.setTime(time.Now())
 		sqd.incRetransmit()
 		ch.incRetransmit()
 	}
-	time.AfterFunc(tt*1+0*time.Millisecond, func() { sq.process(ch) })
+
+	time.AfterFunc(tt*1+0*time.Millisecond, func() { sq.process(conn, ch) })
 }

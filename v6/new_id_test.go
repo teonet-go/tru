@@ -17,7 +17,7 @@ func TestNewExpectedId(t *testing.T) {
 
 	var conn net.PacketConn
 	var addr string
-	ch, _ := newChannel(conn, addr)
+	ch, _ := newChannel(conn, addr, func() {})
 
 	ch.expId = packetIDLimit - 10
 	var wg sync.WaitGroup

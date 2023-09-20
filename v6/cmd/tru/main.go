@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log"
 	"net"
-	"os"
 	"time"
 
 	"github.com/teonet-go/tru/v6"
@@ -133,7 +132,8 @@ func Sender(tru *tru.Tru, conn net.PacketConn, addr string) {
 			fmt.Println("real time", time.Since(start))
 
 			// time.Sleep(5 * time.Second)
-			os.Exit(0)
+			// os.Exit(0)
+			select {}
 		}
 	}
 }

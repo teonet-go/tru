@@ -1,34 +1,74 @@
 package tru
 
 import (
-	"fmt"
+	"log"
 	"net"
 	"sync/atomic"
 	"time"
 )
 
-const packetIDLimit = 0x100000
+const (
+	packetIDLimit   = 0x100000
+	pingAfter       = 5000 * time.Millisecond
+	pingRepeat      = 500 * time.Millisecond
+	disconnectAfter = 8000 * time.Millisecond
+)
+
+// checkDisconnect checks if channels disconnected. A channel is disconnected if
+// it does not receive any packets during disconnectAfter time
+func (ch *Channel) checkDisconnect(conn net.PacketConn) {
+	if ch.disconnected {
+		return
+	}
+
+	switch {
+	// Disconnect this channel
+	case time.Since(ch.lastpacket()) > disconnectAfter:
+		log.Printf("channel disconnected, addr: %s\n", ch.addr)
+		ch.close()
+		return
+	// Send ping
+	case time.Since(ch.lastpacket()) > pingAfter:
+		if time.Since(ch.lastping) > pingRepeat {
+			log.Printf("send ping packet, addr: %s\n", ch.addr)
+			data, _ := headerPacket{0, pPing}.MarshalBinary()
+			conn.WriteTo(data, ch.addr)
+			ch.lastping = time.Now()
+		}
+	}
+
+	time.AfterFunc(pingRepeat, func() { ch.checkDisconnect(conn) })
+}
 
 // Channel data structure and methods receiver
 type Channel struct {
-	conn  net.PacketConn                // Network connection
+	// conn  net.PacketConn                // Network connection
 	addr  net.Addr                      // Channel Remote address
 	sq    *sendQueue                    // Channel Send Queue
 	rq    *receiveQueue                 // Channel Receive Queue
 	id    int32                         // Packet id (to send packet)
 	expId int32                         // Packet expected id (to receive packet)
 	att   atomic.Pointer[time.Duration] // Channel Triptime
+	close func()                        // CLose this channel func
 
 	// Statistics data:
 
 	answer     uint64 // Number of packets answer received
 	retransmit uint64 // Number of packets retransmited
+
+	// Disconnect and ping data
+
+	lastpac      atomic.Pointer[time.Time] // Last packet received time
+	lastping     time.Time                 // Last ping packet send time
+	disconnected bool                      // Disconnected flag
 }
 
 // newChannel creates new tru channel
-func newChannel(conn net.PacketConn, addr string) (ch *Channel, err error) {
+func newChannel(conn net.PacketConn, addr string, close func()) (ch *Channel, err error) {
 	ch = new(Channel)
-	ch.conn = conn
+	// ch.conn = conn
+	ch.close = close
+	ch.setLastpacket()
 	ch.sq = newSendQueue()
 	ch.rq = newReceiveQueue()
 	ch.setTriptime(125 * time.Millisecond)
@@ -38,8 +78,9 @@ func newChannel(conn net.PacketConn, addr string) (ch *Channel, err error) {
 			return
 		}
 	}
-	go ch.sq.process(ch)
-	fmt.Printf("channel ctreated, addr: %s\n", ch.addr)
+	go ch.sq.process(conn, ch)
+	go ch.checkDisconnect(conn)
+	log.Printf("channel ctreated, addr: %s\n", ch.addr)
 	return
 }
 
@@ -86,6 +127,17 @@ func (ch *Channel) calcTriptime(pac *sendQueueData) {
 	tt = (tt*(n-1) + time.Since(pac.time())) / n
 	ch.setTriptime(tt)
 }
+
+// setTriptime sets channel triptime
+func (ch *Channel) setTriptime(tt time.Duration) { ch.att.Store(&tt) }
+
+// lastpacket gets time of last packet received. The packet may be Data, Answer,
+// Ping or Ping answer
+func (ch *Channel) lastpacket() time.Time { return *ch.lastpac.Load() }
+
+// setLastpacket sets last packet received time. The packet may be Data, Answer,
+// Ping or Ping answer
+func (ch *Channel) setLastpacket() { now := time.Now(); ch.lastpac.Store(&now) }
 
 // incAnswer increments answer counter value
 func (ch *Channel) incAnswer() { atomic.AddUint64(&ch.answer, 1) }
@@ -135,6 +187,3 @@ func (ch *Channel) newExpectedId() uint32 {
 	}
 	return uint32(id)
 }
-
-// setTriptime sets channel triptime
-func (ch *Channel) setTriptime(tt time.Duration) { ch.att.Store(&tt) }
