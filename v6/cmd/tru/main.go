@@ -19,6 +19,7 @@ const (
 
 var port = flag.Int("p", 0, "local port number")
 var addr = flag.String("a", "", "remote address to connect to")
+var stat = flag.Bool("stat", false, "print statistic")
 var nomsg = flag.Bool("nomsg", false, "don't show send receive messages")
 
 // var ch *tru.Channel
@@ -38,7 +39,7 @@ func main() {
 	// }
 
 	// Create tru object
-	tru := tru.New()
+	tru := tru.New(*stat)
 
 	// Create connection
 	conn, err := Create(tru, *port)

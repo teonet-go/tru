@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Tru packets Header module
+// Tru packets header module
 
 package tru
 

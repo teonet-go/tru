@@ -10,17 +10,24 @@ import (
 
 const errCantCreateChannel = "can't create tru channel: %s"
 
+// Tru is main tru data structure and methods reciever
 type Tru struct {
-	chm channels
-	*sync.RWMutex
+	channels      // Channels map
+	*sync.RWMutex // Channels map mutex
+
+	started time.Time // Tru started time
 }
 type channels map[string]*Channel
 
 // New creates new Tru object
-func New() *Tru {
+func New(printStat bool) *Tru {
 	tru := new(Tru)
-	tru.chm = make(channels)
+	tru.started = time.Now()
+	tru.channels = make(channels)
 	tru.RWMutex = new(sync.RWMutex)
+	if printStat {
+		tru.printstat()
+	}
 	return tru
 }
 
@@ -52,7 +59,7 @@ func (tru *Tru) GetChannel(addr net.Addr) *Channel {
 	tru.RLock()
 	defer tru.RUnlock()
 
-	ch, ok := tru.chm[addr.String()]
+	ch, ok := tru.channels[addr.String()]
 	if !ok {
 		return nil
 	}
@@ -69,7 +76,7 @@ func (tru *Tru) newChannel(conn net.PacketConn, addr net.Addr) (ch *Channel, err
 	addrStr := addr.String()
 
 	// CHeck channel exists and return existing channel
-	if ch, ok := tru.chm[addrStr]; ok {
+	if ch, ok := tru.channels[addrStr]; ok {
 		return ch, nil
 	}
 
@@ -78,7 +85,7 @@ func (tru *Tru) newChannel(conn net.PacketConn, addr net.Addr) (ch *Channel, err
 	if err != nil {
 		return nil, err
 	}
-	tru.chm[addrStr] = ch
+	tru.channels[addrStr] = ch
 
 	return
 }
@@ -89,11 +96,11 @@ func (tru *Tru) delChannel(ch *Channel) error {
 	defer tru.Unlock()
 
 	addr := ch.addr.String()
-	if _, ok := tru.chm[addr]; !ok {
+	if _, ok := tru.channels[addr]; !ok {
 		return fmt.Errorf("channel does not exists")
 	}
 
-	delete(tru.chm, addr)
+	delete(tru.channels, addr)
 	ch.setClosed()
 	return nil
 }
@@ -104,7 +111,7 @@ func (tru *Tru) getFromReceiveQueue(p []byte) (n int, addr net.Addr, err error) 
 	tru.RLock()
 	defer tru.RUnlock()
 
-	for _, ch := range tru.chm {
+	for _, ch := range tru.channels {
 		data, ok := ch.rq.process(ch)
 		if ok {
 			addr = ch.addr
@@ -116,6 +123,9 @@ func (tru *Tru) getFromReceiveQueue(p []byte) (n int, addr net.Addr, err error) 
 	return
 }
 
+// truPacketConn is a generic packet-oriented network connection.
+//
+// Multiple goroutines may invoke methods on a PacketConn simultaneously.
 type truPacketConn struct {
 	conn net.PacketConn
 	tru  *Tru
