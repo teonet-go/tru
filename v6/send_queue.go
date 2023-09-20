@@ -2,7 +2,7 @@ package tru
 
 import (
 	"container/list"
-	"fmt"
+	"log"
 	"net"
 	"sync"
 	"sync/atomic"
@@ -156,7 +156,8 @@ func (sq *sendQueue) writeDelay() {
 
 // process send queue
 func (sq *sendQueue) process(conn net.PacketConn, ch *Channel) {
-	if ch.disconnected {
+	if ch.closed() {
+		log.Printf("send queue process of channel %s stopped", ch.addr)
 		return
 	}
 
@@ -167,7 +168,7 @@ func (sq *sendQueue) process(conn net.PacketConn, ch *Channel) {
 		sqd, ok := el.Value.(*sendQueueData)
 		if !ok {
 			// TODO: This wrong element shoud be deleted
-			fmt.Printf("bad packet in send queue\n")
+			log.Printf("bad packet in send queue\n")
 			continue
 		}
 

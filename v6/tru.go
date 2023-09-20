@@ -2,6 +2,7 @@ package tru
 
 import (
 	"fmt"
+	"log"
 	"net"
 	"sync"
 	"time"
@@ -73,7 +74,7 @@ func (tru *Tru) newChannel(conn net.PacketConn, addr net.Addr) (ch *Channel, err
 	}
 
 	// Create new channel and add it to channels map
-	ch, err = newChannel(conn, addrStr, func() { ch.disconnected = true; tru.delChannel(ch) })
+	ch, err = newChannel(conn, addrStr, func() { tru.delChannel(ch) })
 	if err != nil {
 		return nil, err
 	}
@@ -92,8 +93,8 @@ func (tru *Tru) delChannel(ch *Channel) error {
 		return fmt.Errorf("channel does not exists")
 	}
 
-	ch.disconnected = true
 	delete(tru.chm, addr)
+	ch.setClosed()
 	return nil
 }
 
@@ -174,6 +175,7 @@ func (c *truPacketConn) ReadFrom(p []byte) (n int, addr net.Addr, err error) {
 			if !gotFromReceiveQueue {
 				data, _ := headerPacket{header.id, pAnswer}.MarshalBinary()
 				c.conn.WriteTo(data, addr)
+				ch.setLastdata()
 			}
 
 			// Check expected id distance
@@ -216,12 +218,13 @@ func (c *truPacketConn) ReadFrom(p []byte) (n int, addr net.Addr, err error) {
 		case pAnswer:
 			// Save answer statistic, calculate triptime and remove package from
 			// send queue
-			if ch != nil {
-				ch.incAnswer()
-				if pac, ok := ch.sq.del(header.id); ok {
-					ch.calcTriptime(pac)
-				}
+			// if ch != nil {
+			ch.setLastdata()
+			ch.incAnswer()
+			if pac, ok := ch.sq.del(header.id); ok {
+				ch.calcTriptime(pac)
 			}
+			// }
 			// Continue reading
 			// return c.ReadFrom(p)
 
@@ -229,6 +232,7 @@ func (c *truPacketConn) ReadFrom(p []byte) (n int, addr net.Addr, err error) {
 		case pPing:
 			data, _ := headerPacket{0, pPong}.MarshalBinary()
 			c.conn.WriteTo(data, addr)
+			log.Printf("send pong packet, addr: %s\n", ch.addr)
 
 		// pPong (ping answer) received
 		case pPong:
@@ -268,22 +272,8 @@ func (c *truPacketConn) WriteTo(p []byte, addr net.Addr) (n int, err error) {
 	return
 }
 
-func (c *truPacketConn) Close() error {
-	return c.conn.Close()
-}
-
-func (c *truPacketConn) LocalAddr() net.Addr {
-	return c.conn.LocalAddr()
-}
-
-func (c *truPacketConn) SetDeadline(t time.Time) error {
-	return c.conn.SetDeadline(t)
-}
-
-func (c *truPacketConn) SetReadDeadline(t time.Time) error {
-	return c.conn.SetReadDeadline(t)
-}
-
-func (c *truPacketConn) SetWriteDeadline(t time.Time) error {
-	return c.conn.SetWriteDeadline(t)
-}
+func (c *truPacketConn) Close() error                       { return c.conn.Close() }
+func (c *truPacketConn) LocalAddr() net.Addr                { return c.conn.LocalAddr() }
+func (c *truPacketConn) SetDeadline(t time.Time) error      { return c.conn.SetDeadline(t) }
+func (c *truPacketConn) SetReadDeadline(t time.Time) error  { return c.conn.SetReadDeadline(t) }
+func (c *truPacketConn) SetWriteDeadline(t time.Time) error { return c.conn.SetWriteDeadline(t) }

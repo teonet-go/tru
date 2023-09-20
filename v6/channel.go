@@ -1,6 +1,7 @@
 package tru
 
 import (
+	"fmt"
 	"log"
 	"net"
 	"sync/atomic"
@@ -8,37 +9,22 @@ import (
 )
 
 const (
-	packetIDLimit   = 0x100000
-	pingAfter       = 5000 * time.Millisecond
-	pingRepeat      = 500 * time.Millisecond
+	// Packet ID limit from 0 to packetIDLimit-1
+	packetIDLimit = 0x100000
+
+	// Send ping after pingAfter time if no packet received
+	pingAfter = 5000 * time.Millisecond
+
+	// Repeat pings every pingRepeat time
+	pingRepeat = 500 * time.Millisecond
+
+	// Disconnect after disconnectAfter time if nothing received
 	disconnectAfter = 8000 * time.Millisecond
+
+	// Disconnect after disconnectAfterPings * pingRepeat if only pongs recived.
+	// Set to 0 for never disconnect if channels peer answer to ping.
+	disconnectAfterPings = 2
 )
-
-// checkDisconnect checks if channels disconnected. A channel is disconnected if
-// it does not receive any packets during disconnectAfter time
-func (ch *Channel) checkDisconnect(conn net.PacketConn) {
-	if ch.disconnected {
-		return
-	}
-
-	switch {
-	// Disconnect this channel
-	case time.Since(ch.lastpacket()) > disconnectAfter:
-		log.Printf("channel disconnected, addr: %s\n", ch.addr)
-		ch.close()
-		return
-	// Send ping
-	case time.Since(ch.lastpacket()) > pingAfter:
-		if time.Since(ch.lastping) > pingRepeat {
-			log.Printf("send ping packet, addr: %s\n", ch.addr)
-			data, _ := headerPacket{0, pPing}.MarshalBinary()
-			conn.WriteTo(data, ch.addr)
-			ch.lastping = time.Now()
-		}
-	}
-
-	time.AfterFunc(pingRepeat, func() { ch.checkDisconnect(conn) })
-}
 
 // Channel data structure and methods receiver
 type Channel struct {
@@ -56,17 +42,18 @@ type Channel struct {
 	answer     uint64 // Number of packets answer received
 	retransmit uint64 // Number of packets retransmited
 
-	// Disconnect and ping data
+	// Disconnect and ping data:
 
-	lastpac      atomic.Pointer[time.Time] // Last packet received time
-	lastping     time.Time                 // Last ping packet send time
-	disconnected bool                      // Disconnected flag
+	lastpac     atomic.Pointer[time.Time] // Last packet received time
+	lastdatapac atomic.Pointer[time.Time] // Last Data packet or Answer received time
+	lastping    time.Time                 // Last Ping packet send time
+	closedFlag  int32                     // Channel closed flag
 }
 
 // newChannel creates new tru channel
 func newChannel(conn net.PacketConn, addr string, close func()) (ch *Channel, err error) {
 	ch = new(Channel)
-	// ch.conn = conn
+	ch.setLastdata()
 	ch.close = close
 	ch.setLastpacket()
 	ch.sq = newSendQueue()
@@ -139,6 +126,12 @@ func (ch *Channel) lastpacket() time.Time { return *ch.lastpac.Load() }
 // Ping or Ping answer
 func (ch *Channel) setLastpacket() { now := time.Now(); ch.lastpac.Store(&now) }
 
+// lastdata gets time of last Data or Answer packet received.
+func (ch *Channel) lastdata() time.Time { return *ch.lastdatapac.Load() }
+
+// setLastdata sets last Data or Answer packet received time.
+func (ch *Channel) setLastdata() { now := time.Now(); ch.lastdatapac.Store(&now) }
+
 // incAnswer increments answer counter value
 func (ch *Channel) incAnswer() { atomic.AddUint64(&ch.answer, 1) }
 
@@ -186,4 +179,44 @@ func (ch *Channel) newExpectedId() uint32 {
 		atomic.AddInt32(&ch.expId, -packetIDLimit) // Reset
 	}
 	return uint32(id)
+}
+
+// closed checks if channel already closed and return true if so
+func (ch *Channel) closed() bool { return atomic.LoadInt32(&ch.closedFlag) > 0 }
+
+// setClosed sets channel closedFlag to true
+func (ch *Channel) setClosed() { atomic.StoreInt32(&ch.closedFlag, 1) }
+
+// checkDisconnect process checks if channels disconnected. A channel is
+// disconnected if it does not receive any packets during disconnectAfter time
+func (ch *Channel) checkDisconnect(conn net.PacketConn) {
+	var stopProcessMsg = fmt.Sprintf(
+		"check disconnect process of channel %s stopped", ch.addr,
+	)
+	if ch.closed() {
+		log.Println(stopProcessMsg)
+		return
+	}
+
+	switch {
+	// Disconnect this channel in channel does not send data and does not answer
+	// to ping or
+	// Disconnect if channel does not send data and ping time expired
+	case time.Since(ch.lastpacket()) > disconnectAfter, disconnectAfterPings > 0 &&
+		time.Since(ch.lastdata()) > disconnectAfter+pingAfter*disconnectAfterPings:
+		log.Println(stopProcessMsg)
+		log.Printf("channel disconnected, addr: %s\n", ch.addr)
+		ch.close()
+		return
+
+	// Send ping
+	case time.Since(ch.lastpacket()) > pingAfter &&
+		time.Since(ch.lastping) > pingRepeat:
+		log.Printf("send ping packet, addr: %s\n", ch.addr)
+		data, _ := headerPacket{0, pPing}.MarshalBinary()
+		conn.WriteTo(data, ch.addr)
+		ch.lastping = time.Now()
+	}
+
+	time.AfterFunc(pingRepeat, func() { ch.checkDisconnect(conn) })
 }
