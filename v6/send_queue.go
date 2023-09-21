@@ -150,7 +150,8 @@ func (sq *sendQueue) writeDelay() {
 		}
 
 		// Wait until can write
-		sq.Wait()
+		// sq.Wait()
+		time.Sleep(10 * time.Microsecond)
 	}
 }
 
@@ -161,6 +162,7 @@ func (sq *sendQueue) process(conn net.PacketConn, ch *Channel) {
 		return
 	}
 
+	var i int
 	var tt = ch.Triptime()
 	const extraTime = 10 * time.Millisecond
 	for el := sq.front(); el != nil; el = sq.next(el) {
@@ -177,11 +179,17 @@ func (sq *sendQueue) process(conn net.PacketConn, ch *Channel) {
 			break
 		}
 
+		if i > 0 && sqd.retransmit() > 0 {
+			break
+		}
+
 		// Retransmit package
 		conn.WriteTo(sqd.data, ch.addr)
+		ch.Stat.incRetransmit()
 		sqd.setTime(time.Now())
 		sqd.incRetransmit()
-		ch.incRetransmit()
+
+		i++
 	}
 
 	time.AfterFunc(tt*1+0*time.Millisecond, func() { sq.process(conn, ch) })

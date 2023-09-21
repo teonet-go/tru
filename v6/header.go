@@ -21,10 +21,10 @@ const (
 	statusConnectClientAnswer              // *** Not used in tru v6
 	statusConnectDone                      // *** Not used in tru v6
 
-	pData   // Data packet
-	pAnswer // Answer to Data packet
-	pPing   // Ping packet
-	pPong   // Ping answer packet
+	pData // Data packet
+	pAck  // Answer to data packet (acknowledgement)
+	pPing // Ping packet
+	pPong // Ping answer packet
 
 	statusDisconnect // *** Not used in tru v6
 	statusPunch      // *** Not used in tru v6

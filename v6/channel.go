@@ -22,12 +22,12 @@ const (
 
 	// Disconnect after disconnectAfterPings * pingRepeat if only pongs recived.
 	// Set to 0 for never disconnect if channels peer answer to ping.
-	disconnectAfterPings = 2
+	disconnectAfterPings = 0 // 2
 )
 
 // Channel data structure and methods receiver
 type Channel struct {
-	// conn  net.PacketConn                // Network connection
+	// conn  net.PacketConn             // Network connection
 	addr  net.Addr                      // Channel Remote address
 	sq    *sendQueue                    // Channel Send Queue
 	rq    *receiveQueue                 // Channel Receive Queue
@@ -36,17 +36,24 @@ type Channel struct {
 	att   atomic.Pointer[time.Duration] // Channel Triptime
 	close func()                        // CLose this channel func
 
-	// Statistics data:
-
-	answer     uint64 // Number of packets answer received
-	retransmit uint64 // Number of packets retransmited
+	// Statistics data (atomic vars) and methods
+	Stat ChannelStat
 
 	// Disconnect and ping data:
 
 	lastpac     atomic.Pointer[time.Time] // Last packet received time
 	lastdatapac atomic.Pointer[time.Time] // Last Data packet or Answer received time
 	lastping    time.Time                 // Last Ping packet send time
-	closedFlag  int32                     // Channel closed flag
+	closedFlag  int32                     // Channel closed atomic bool flag
+}
+
+// ChannelStat contains statistics data (atomic vars) and methods to work with it
+type ChannelStat struct {
+	sent       uint64 // Number of data packets sent
+	ack        uint64 // Number of packets answer (acknowledgement) received
+	retransmit uint64 // Number of packets data retransmited
+	recv       uint64 // Number of data packets received
+	drop       uint64 // Number of dropped received data packets
 }
 
 // newChannel creates new tru channel
@@ -57,7 +64,7 @@ func newChannel(conn net.PacketConn, addr string, close func()) (ch *Channel, er
 	ch.setLastpacket()
 	ch.sq = newSendQueue()
 	ch.rq = newReceiveQueue()
-	ch.setTriptime(125 * time.Millisecond)
+	ch.setTriptime(1 * time.Millisecond)
 	if len(addr) > 0 {
 		ch.addr, err = net.ResolveUDPAddr("udp", addr)
 		if err != nil {
@@ -94,21 +101,30 @@ func (ch *Channel) distance(id uint32) int {
 	return int(diff - packetIDLimit)
 }
 
-// Answer returns answer counter value
-func (ch *Channel) Answer() uint64 { return atomic.LoadUint64(&ch.answer) }
+// Ack returns answer (acknowledgement) counter value
+func (ch *ChannelStat) Ack() uint64 { return atomic.LoadUint64(&ch.ack) }
+
+// Sent returns data packet sent counter value
+func (ch *ChannelStat) Sent() uint64 { return atomic.LoadUint64(&ch.sent) }
+
+// Recv returns data packet received counter value
+func (ch *ChannelStat) Recv() uint64 { return atomic.LoadUint64(&ch.recv) }
+
+// Drop returns number of droppet received data packets (duplicate data packets)
+func (ch *ChannelStat) Drop() uint64 { return atomic.LoadUint64(&ch.drop) }
 
 // SendQueueLen returns send queue length
 func (ch *Channel) SendQueueLen() int { return ch.sq.len() }
 
 // Retransmit returns retransmit counter value
-func (ch *Channel) Retransmit() uint64 { return atomic.LoadUint64(&ch.retransmit) }
+func (ch *ChannelStat) Retransmit() uint64 { return atomic.LoadUint64(&ch.retransmit) }
 
 // Triptime gets channel triptime
 func (ch *Channel) Triptime() time.Duration { return *ch.att.Load() }
 
 // calcTriptime calculates new timestamp
 func (ch *Channel) calcTriptime(pac *sendQueueData) {
-	const n = 1
+	const n = 10
 	tt := ch.Triptime()
 	tt = (tt*(n-1) + time.Since(pac.time())) / n
 	ch.setTriptime(tt)
@@ -131,11 +147,20 @@ func (ch *Channel) lastdata() time.Time { return *ch.lastdatapac.Load() }
 // setLastdata sets last Data or Answer packet received time.
 func (ch *Channel) setLastdata() { now := time.Now(); ch.lastdatapac.Store(&now) }
 
-// incAnswer increments answer counter value
-func (ch *Channel) incAnswer() { atomic.AddUint64(&ch.answer, 1) }
+// incAck increments answers (acknowledgement) counter value
+func (ch *ChannelStat) incAck() { atomic.AddUint64(&ch.ack, 1) }
+
+// incSent increments send data peckets counter value
+func (ch *ChannelStat) incSent() { atomic.AddUint64(&ch.sent, 1) }
+
+// incRecv increments received data peckets counter value
+func (ch *ChannelStat) incRecv() { atomic.AddUint64(&ch.recv, 1) }
+
+// incDrop increments dropped data peckets counter value
+func (ch *ChannelStat) incDrop() { atomic.AddUint64(&ch.drop, 1) }
 
 // incAnswer increments retransmit counter value
-func (ch *Channel) incRetransmit() { atomic.AddUint64(&ch.retransmit, 1) }
+func (ch *ChannelStat) incRetransmit() { atomic.AddUint64(&ch.retransmit, 1) }
 
 // expectedId gets expected id
 func (ch *Channel) expectedId() uint32 { return uint32(atomic.LoadInt32(&ch.expId) % packetIDLimit) }

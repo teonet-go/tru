@@ -122,8 +122,7 @@ func Sender(tru *tru.Tru, conn net.PacketConn, addr string) {
 		}
 
 		// time.Sleep(1 * time.Microsecond)
-		if time.Since(start) > 1000*time.Millisecond {
-
+		if true && time.Since(start) > 20000*time.Millisecond {
 			ch := tru.GetChannel(a)
 
 			fmt.Println("was send", i+1, "per second")
@@ -133,18 +132,22 @@ func Sender(tru *tru.Tru, conn net.PacketConn, addr string) {
 			for ch.SendQueueLen() > 0 {
 				time.Sleep(1 * time.Millisecond)
 			}
-			fmt.Println("was send", i+1, "per second")
+			dur := time.Since(start)
+			fmt.Println("was send", (i+1)/int(dur.Milliseconds()/1000), "packets")
 			fmt.Printf("retransmit %d, %.2f%%\n",
-				ch.Retransmit(), 100.00*float64(ch.Retransmit())/float64(i+1))
-			fmt.Println("got answers", ch.Answer())
+				ch.Stat.Retransmit(), 100.00*float64(ch.Stat.Retransmit())/float64(i+1))
+			fmt.Println("got answers", ch.Stat.Ack())
 			fmt.Println("send queue size", ch.SendQueueLen())
 			fmt.Println("trip time ", ch.Triptime())
 			fmt.Println("---")
-			fmt.Println("real time", time.Since(start))
+			fmt.Println("real time", dur)
 
 			// time.Sleep(5 * time.Second)
 			// os.Exit(0)
-			select {}
+			// select {}
+			time.Sleep(10 * time.Second)
+			fmt.Print("\n\nsending packets continue ...\n\n")
+			start = time.Now()
 		}
 	}
 }

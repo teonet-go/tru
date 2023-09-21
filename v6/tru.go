@@ -2,6 +2,7 @@ package tru
 
 import (
 	"fmt"
+	"log"
 	"net"
 	"sync"
 	"time"
@@ -10,8 +11,8 @@ import (
 const errCantCreateChannel = "can't create tru channel: %s"
 
 const (
-	readChannelLen    = 2048
-	readChannelBufLen = 2048
+	readChannelLen    = 4 * 1024
+	readChannelBufLen = 2 * 1024
 	numReaders        = 4
 )
 
@@ -186,6 +187,7 @@ func (c *truPacketConn) readFrom( /* p []byte */ ) ( /* n int, addr net.Addr, */
 		if !gotFromReceiveQueue {
 			n, addr, err = c.conn.ReadFrom(p)
 			if err != nil {
+				log.Println("read from error:", err)
 				return
 			}
 		}
@@ -229,20 +231,19 @@ func (c *truPacketConn) readFrom( /* p []byte */ ) ( /* n int, addr net.Addr, */
 
 			// Already processed packet (id < expectedID)
 			case dist < 0:
-				// TODO: Set channel drop statistic
-				// ch.stat.setDrop()
+				// Set channel drop statistic
+				ch.Stat.incDrop()
 
 			// Packet with id more than expectedID placed to receive queue and wait
 			// previouse packets
 			case dist > 0:
 				_, ok := ch.rq.get(header.id)
 				if !ok {
-					// data := slices.Clone(p[:n])
 					data := append([]byte{}, p[:n]...)
 					ch.rq.add(header.id, data)
 				} else {
-					// TODO: Set channel drop statistic
-					// ch.stat.setDrop()
+					// Set channel drop statistic
+					ch.Stat.incDrop()
 				}
 
 			// Valid data packet received (id == expectedID)
@@ -255,25 +256,29 @@ func (c *truPacketConn) readFrom( /* p []byte */ ) ( /* n int, addr net.Addr, */
 					c.tru.readChannel <- readChannelData{
 						n, addr, err, append([]byte{}, p[headerLen:]...),
 					}
+					ch.Stat.incRecv()
 				} else {
 					// Drop this data packet
 					processed = false
+					if !gotFromReceiveQueue {
+						ch.setLastdata()
+					}
 				}
 			}
 
 			// Send answer
 			if !gotFromReceiveQueue && processed {
-				data, _ := headerPacket{header.id, pAnswer}.MarshalBinary()
+				data, _ := headerPacket{header.id, pAck}.MarshalBinary()
 				c.conn.WriteTo(data, addr)
 				ch.setLastdata()
 			}
 
-		// Answer received
-		case pAnswer:
+		// Answer to data packet (acknowledgement) received
+		case pAck:
 			// Save answer statistic, calculate triptime and remove package from
 			// send queue
 			ch.setLastdata()
-			ch.incAnswer()
+			ch.Stat.incAck()
 			if pac, ok := ch.sq.del(header.id); ok {
 				ch.calcTriptime(pac)
 			}
@@ -318,8 +323,7 @@ func (c *truPacketConn) WriteTo(p []byte, addr net.Addr) (n int, err error) {
 	// Write to udp
 	n, err = c.conn.WriteTo(data, addr)
 	n -= headerLen
-
-	go ch.sq.add(id, data)
+	go func() { ch.sq.add(id, data); ch.Stat.incSent() }()
 
 	return
 }

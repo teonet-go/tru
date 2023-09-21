@@ -39,16 +39,24 @@ func (tru *Tru) printstat() {
 		var numRows = 0
 		l := term.Func.ClearLine() + strings.Repeat("-", 125)
 
-		for addr := range tru.channels {
+		for addr, ch := range tru.channels {
 			table += "\n"
-			table += term.Func.ClearLine() + addr
+			table += term.Func.ClearLine() + fmt.Sprintf(
+				"%-17.17s %9d %7d %6d %12d %6d %12d %7d %6d %5d %5d %5d %7d %7.3f",
+				addr, ch.Stat.Sent(), 0, ch.Stat.Retransmit(), ch.Stat.Ack(), 0,
+				ch.Stat.Recv(), 0, ch.Stat.Drop(), ch.sq.len(), ch.rq.len(), 0,
+				0, float64(ch.Triptime().Microseconds())/1000.0,
+			)
 			numRows++
 		}
 		if numRows > 0 {
-			table = l + table + "\n" + l
-			numRows += 2
+			title := "" +
+				"ADDR                   SEND    SSEC   RSND          ACK   ACKD" +
+				"         RECV    RSEC   DROP    SQ    RQ   RTA   DELAY      TT\n"
+			table = l + "\n" + title + l + table + "\n" + l
+			numRows += 4
 		} else {
-			table = l //+ "\n" + term.Func.ClearLine()
+			table = l
 			numRows = 1
 		}
 
@@ -59,7 +67,7 @@ func (tru *Tru) printstat() {
 			term.Func.ClearLine(),
 
 			"local", // tru.LocalAddr().String(),
-			0,       // len(tru.readerCh),
+			len(tru.readChannel),
 			0,       // len(tru.senderCh),
 			time.Since(tru.started),
 			table,
