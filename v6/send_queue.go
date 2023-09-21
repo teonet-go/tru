@@ -157,7 +157,7 @@ func (sq *sendQueue) writeDelay() {
 // process send queue
 func (sq *sendQueue) process(conn net.PacketConn, ch *Channel) {
 	if ch.closed() {
-		log.Printf("send queue process of channel %s stopped", ch.addr)
+		// log.Printf("send queue process of channel %s stopped", ch.addr)
 		return
 	}
 

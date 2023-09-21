@@ -20,7 +20,8 @@ const (
 var port = flag.Int("p", 0, "local port number")
 var addr = flag.String("a", "", "remote address to connect to")
 var stat = flag.Bool("stat", false, "print statistic")
-var nomsg = flag.Bool("nomsg", false, "don't show send receive messages")
+var nomsg = flag.Bool("nomsg", false, "do not show sending and receiving messages")
+var noansw = flag.Bool("noansw", false, "do not send answers in server mode")
 
 // var ch *tru.Channel
 
@@ -77,14 +78,23 @@ func Listen(conn net.PacketConn) {
 
 	for {
 		data := make([]byte, 1024)
-		n, addr, err := conn.ReadFrom(data)
+		n, a, err := conn.ReadFrom(data)
 		if err != nil {
 			log.Printf("error reading from: %s\n", err)
 			continue
 		}
 
 		if !*nomsg {
-			log.Printf("got %d from %s, data: %s\n", n, addr.String(), data[:n])
+			log.Printf("got %d from %s, data: %s\n", n, a.String(), data[:n])
+		}
+
+		// Send answer in server mode
+		if len(*addr) == 0 && !*noansw {
+			d := append([]byte("answer to "), data[:n]...)
+			conn.WriteTo(d, a)
+			if !*nomsg {
+				log.Printf("send answer: %s\n", d[:n])
+			}
 		}
 	}
 }

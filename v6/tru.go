@@ -2,7 +2,6 @@ package tru
 
 import (
 	"fmt"
-	"log"
 	"net"
 	"sync"
 	"time"
@@ -10,12 +9,25 @@ import (
 
 const errCantCreateChannel = "can't create tru channel: %s"
 
+const (
+	readChannelLen    = 2048
+	readChannelBufLen = 2048
+	numReaders        = 4
+)
+
 // Tru is main tru data structure and methods reciever
 type Tru struct {
 	channels      // Channels map
 	*sync.RWMutex // Channels map mutex
+	readChannel   chan readChannelData
 
 	started time.Time // Tru started time
+}
+type readChannelData struct {
+	n    int
+	addr net.Addr
+	err  error
+	data []byte
 }
 type channels map[string]*Channel
 
@@ -25,6 +37,7 @@ func New(printStat bool) *Tru {
 	tru.started = time.Now()
 	tru.channels = make(channels)
 	tru.RWMutex = new(sync.RWMutex)
+	tru.readChannel = make(chan readChannelData, readChannelLen)
 	if printStat {
 		tru.printstat()
 	}
@@ -51,6 +64,9 @@ func New(printStat bool) *Tru {
 func (tru *Tru) ListenPacket(network, address string) (net.PacketConn, error) {
 	conn, err := net.ListenPacket(network, address)
 	truConn := &truPacketConn{conn: conn, tru: tru}
+	for i := 0; i < numReaders; i++ {
+		go truConn.readFrom()
+	}
 	return truConn, err
 }
 
@@ -141,13 +157,29 @@ type truPacketConn struct {
 // ReadFrom can be made to time out and return an error after a
 // fixed time limit; see SetDeadline and SetReadDeadline.
 func (c *truPacketConn) ReadFrom(p []byte) (n int, addr net.Addr, err error) {
+	// Read processed message from read go channel
+	r := <-c.tru.readChannel
+	n, addr, err = r.n, r.addr, r.err
+	copy(p, r.data)
+	return
+}
 
+// readFrom is reader worker
+func (c *truPacketConn) readFrom( /* p []byte */ ) ( /* n int, addr net.Addr, */ err error) {
+	p := make([]byte, readChannelBufLen)
 	for {
+
+		var n int
+		var addr net.Addr
+		var readChannelBusy bool = len(c.tru.readChannel) >= cap(c.tru.readChannel)
+
 		// Get saved packet with expected id from receive queue on any channel
 		var gotFromReceiveQueue bool
-		n, addr, err = c.tru.getFromReceiveQueue(p)
-		if err == nil {
-			gotFromReceiveQueue = true
+		if !readChannelBusy {
+			n, addr, err = c.tru.getFromReceiveQueue(p)
+			if err == nil {
+				gotFromReceiveQueue = true
+			}
 		}
 
 		// Read data from connection
@@ -162,7 +194,8 @@ func (c *truPacketConn) ReadFrom(p []byte) (n int, addr net.Addr, err error) {
 		header := headerPacket{}
 		err = header.UnmarshalBinary(p)
 		if err != nil {
-			return
+			// TODO: print some message if wrong header received?
+			continue
 		}
 
 		// Get or create channel
@@ -170,7 +203,8 @@ func (c *truPacketConn) ReadFrom(p []byte) (n int, addr net.Addr, err error) {
 		ch, err = c.tru.newChannel(c.conn, addr)
 		if err != nil {
 			err = fmt.Errorf(errCantCreateChannel, err)
-			return
+			// TODO: print some message if can't create ot get channel?
+			continue
 		}
 
 		// Set last packet received time
@@ -181,12 +215,13 @@ func (c *truPacketConn) ReadFrom(p []byte) (n int, addr net.Addr, err error) {
 
 		// Data received
 		case pData:
-			// Send answer
-			if !gotFromReceiveQueue {
-				data, _ := headerPacket{header.id, pAnswer}.MarshalBinary()
-				c.conn.WriteTo(data, addr)
-				ch.setLastdata()
-			}
+
+			// TODO: Check this code again: May be we need to lock this code
+			// because we check expected id in distance func and change it befor
+			// send data to readChannel in newExpectedId() func. And we have
+			// some number of workers which read connection an the same time.
+
+			var processed = true
 
 			// Check expected id distance
 			dist := ch.distance(header.id)
@@ -212,11 +247,25 @@ func (c *truPacketConn) ReadFrom(p []byte) (n int, addr net.Addr, err error) {
 
 			// Valid data packet received (id == expectedID)
 			case dist == 0:
-				// Prepare data to return
-				copy(p, p[headerLen:])
-				n = n - headerLen
-				ch.newExpectedId()
-				return
+
+				if !readChannelBusy {
+					// Send data packet to readChannel
+					ch.newExpectedId()
+					n = n - headerLen
+					c.tru.readChannel <- readChannelData{
+						n, addr, err, append([]byte{}, p[headerLen:]...),
+					}
+				} else {
+					// Drop this data packet
+					processed = false
+				}
+			}
+
+			// Send answer
+			if !gotFromReceiveQueue && processed {
+				data, _ := headerPacket{header.id, pAnswer}.MarshalBinary()
+				c.conn.WriteTo(data, addr)
+				ch.setLastdata()
 			}
 
 		// Answer received
@@ -233,7 +282,7 @@ func (c *truPacketConn) ReadFrom(p []byte) (n int, addr net.Addr, err error) {
 		case pPing:
 			data, _ := headerPacket{0, pPong}.MarshalBinary()
 			c.conn.WriteTo(data, addr)
-			log.Printf("send pong packet, addr: %s\n", ch.addr)
+			// log.Printf("send pong packet, addr: %s\n", ch.addr)
 
 		// pPong (ping answer) received
 		case pPong:

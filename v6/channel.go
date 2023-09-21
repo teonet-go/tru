@@ -1,7 +1,6 @@
 package tru
 
 import (
-	"fmt"
 	"log"
 	"net"
 	"sync/atomic"
@@ -190,11 +189,11 @@ func (ch *Channel) setClosed() { atomic.StoreInt32(&ch.closedFlag, 1) }
 // checkDisconnect process checks if channels disconnected. A channel is
 // disconnected if it does not receive any packets during disconnectAfter time
 func (ch *Channel) checkDisconnect(conn net.PacketConn) {
-	var stopProcessMsg = fmt.Sprintf(
-		"check disconnect process of channel %s stopped", ch.addr,
-	)
+	// var stopProcessMsg = fmt.Sprintf(
+	// 	"check disconnect process of channel %s stopped", ch.addr,
+	// )
 	if ch.closed() {
-		log.Println(stopProcessMsg)
+		// log.Println(stopProcessMsg)
 		return
 	}
 
@@ -204,7 +203,7 @@ func (ch *Channel) checkDisconnect(conn net.PacketConn) {
 	// Disconnect if channel does not send data and ping time expired
 	case time.Since(ch.lastpacket()) > disconnectAfter, disconnectAfterPings > 0 &&
 		time.Since(ch.lastdata()) > disconnectAfter+pingAfter*disconnectAfterPings:
-		log.Println(stopProcessMsg)
+		// log.Println(stopProcessMsg)
 		log.Printf("channel disconnected, addr: %s\n", ch.addr)
 		ch.close()
 		return
@@ -212,7 +211,7 @@ func (ch *Channel) checkDisconnect(conn net.PacketConn) {
 	// Send ping
 	case time.Since(ch.lastpacket()) > pingAfter &&
 		time.Since(ch.lastping) > pingRepeat:
-		log.Printf("send ping packet, addr: %s\n", ch.addr)
+		// log.Printf("send ping packet, addr: %s\n", ch.addr)
 		data, _ := headerPacket{0, pPing}.MarshalBinary()
 		conn.WriteTo(data, ch.addr)
 		ch.lastping = time.Now()
