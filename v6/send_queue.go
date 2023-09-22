@@ -69,8 +69,7 @@ func (sq *sendQueue) add(id uint32, data []byte) {
 
 	packet := &sendQueueData{data: data}
 	packet.setTime(time.Now())
-	el := sq.l.PushBack(packet)
-	sq.m[id] = el
+	sq.m[id] = sq.l.PushBack(packet)
 }
 
 // del removes packet from send queue by id
@@ -82,19 +81,21 @@ func (sq *sendQueue) del(id uint32) (data *sendQueueData, ok bool) {
 	if !ok {
 		return
 	}
+	data, ok = sq.l.Remove(el).(*sendQueueData)
 	delete(sq.m, id)
-	sq.l.Remove(el)
 
 	sq.Signal()
 
-	data, ok = el.Value.(*sendQueueData)
+	// data, ok = el.Value.(*sendQueueData)
 	return
 }
 
 // get gets packet from send queue by id
-func (sq *sendQueue) get(id uint32) (data *sendQueueData, ok bool) {
-	sq.Lock()
-	defer sq.Unlock()
+func (sq *sendQueue) get(id uint32, lock ...bool) (data *sendQueueData, ok bool) {
+	if len(lock) == 0 || lock[0] {
+		sq.RLock()
+		defer sq.RUnlock()
+	}
 
 	el, ok := sq.m[id]
 	if !ok {
@@ -126,11 +127,19 @@ func (sq *sendQueue) len() int {
 }
 
 // writeDelay uses in send packets and wait whail send will be avalable
-func (sq *sendQueue) writeDelay() {
+func (sq *sendQueue) writeDelay(id uint32) {
 	sq.L.Lock()
 	defer sq.L.Unlock()
 
+	const sleepTime = 8 * time.Microsecond
 	for {
+
+		// Wait if id already in send queue
+		if _, ok := sq.get(id); ok {
+			time.Sleep(sleepTime)
+			continue
+		}
+
 		// Get front element
 		el := sq.front()
 		if el == nil {
@@ -151,7 +160,10 @@ func (sq *sendQueue) writeDelay() {
 
 		// Wait until can write
 		// sq.Wait()
-		time.Sleep(10 * time.Microsecond)
+		// continue
+
+		time.Sleep(sleepTime)
+		break
 	}
 }
 
@@ -165,7 +177,10 @@ func (sq *sendQueue) process(conn net.PacketConn, ch *Channel) {
 	var i int
 	var tt = ch.Triptime()
 	const extraTime = 10 * time.Millisecond
-	for el := sq.front(); el != nil; el = sq.next(el) {
+
+	sq.RLock()
+	// for el := sq.front(); el != nil; el = sq.next(el) {
+	for el := sq.l.Front(); el != nil; el = el.Next() {
 		// Get send queue data
 		sqd, ok := el.Value.(*sendQueueData)
 		if !ok {
@@ -179,6 +194,7 @@ func (sq *sendQueue) process(conn net.PacketConn, ch *Channel) {
 			break
 		}
 
+		// Stop if second element has retransmits
 		if i > 0 && sqd.retransmit() > 0 {
 			break
 		}
@@ -189,8 +205,14 @@ func (sq *sendQueue) process(conn net.PacketConn, ch *Channel) {
 		sqd.setTime(time.Now())
 		sqd.incRetransmit()
 
+		// h := headerPacket{}
+		// h.UnmarshalBinary(sqd.data)
+		// _, ok = sq.get(h.id, false)
+		// log.Println("retransmit", h.id, i, ok)
+
 		i++
 	}
+	sq.RUnlock()
 
 	time.AfterFunc(tt*1+0*time.Millisecond, func() { sq.process(conn, ch) })
 }

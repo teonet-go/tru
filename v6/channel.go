@@ -51,6 +51,7 @@ type Channel struct {
 type ChannelStat struct {
 	sent       uint64 // Number of data packets sent
 	ack        uint64 // Number of packets answer (acknowledgement) received
+	ackd       uint64 // Number of dropped packets answer (acknowledgement)
 	retransmit uint64 // Number of packets data retransmited
 	recv       uint64 // Number of data packets received
 	drop       uint64 // Number of dropped received data packets
@@ -104,6 +105,9 @@ func (ch *Channel) distance(id uint32) int {
 // Ack returns answer (acknowledgement) counter value
 func (ch *ChannelStat) Ack() uint64 { return atomic.LoadUint64(&ch.ack) }
 
+// ackd returns dropped answer (acknowledgement) counter value
+func (ch *ChannelStat) Ackd() uint64 { return atomic.LoadUint64(&ch.ackd) }
+
 // Sent returns data packet sent counter value
 func (ch *ChannelStat) Sent() uint64 { return atomic.LoadUint64(&ch.sent) }
 
@@ -149,6 +153,9 @@ func (ch *Channel) setLastdata() { now := time.Now(); ch.lastdatapac.Store(&now)
 
 // incAck increments answers (acknowledgement) counter value
 func (ch *ChannelStat) incAck() { atomic.AddUint64(&ch.ack, 1) }
+
+// incAckd increments dropped answers (acknowledgement) counter value
+func (ch *ChannelStat) incAckd() { atomic.AddUint64(&ch.ackd, 1) }
 
 // incSent increments send data peckets counter value
 func (ch *ChannelStat) incSent() { atomic.AddUint64(&ch.sent, 1) }

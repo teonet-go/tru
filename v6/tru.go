@@ -278,16 +278,18 @@ func (c *truPacketConn) readFrom( /* p []byte */ ) ( /* n int, addr net.Addr, */
 			// Save answer statistic, calculate triptime and remove package from
 			// send queue
 			ch.setLastdata()
-			ch.Stat.incAck()
+
 			if pac, ok := ch.sq.del(header.id); ok {
 				ch.calcTriptime(pac)
+				ch.Stat.incAck()
+			} else {
+				ch.Stat.incAckd()
 			}
 
 		// Ping received
 		case pPing:
 			data, _ := headerPacket{0, pPong}.MarshalBinary()
 			c.conn.WriteTo(data, addr)
-			// log.Printf("send pong packet, addr: %s\n", ch.addr)
 
 		// pPong (ping answer) received
 		case pPong:
@@ -317,13 +319,13 @@ func (c *truPacketConn) WriteTo(p []byte, addr net.Addr) (n int, err error) {
 	}
 	data = append(data, p...)
 
-	// Wait until send avalable
-	ch.sq.writeDelay()
+	// Wait until send avalable and the same id removed from send queue
+	ch.sq.writeDelay(id)
 
 	// Write to udp
 	n, err = c.conn.WriteTo(data, addr)
 	n -= headerLen
-	go func() { ch.sq.add(id, data); ch.Stat.incSent() }()
+	func() { ch.sq.add(id, data); ch.Stat.incSent() }()
 
 	return
 }
