@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/teonet-go/tru/v6"
+	"golang.org/x/text/language"
+	"golang.org/x/text/message"
 )
 
 const (
@@ -122,10 +124,11 @@ func Sender(tru *tru.Tru, conn net.PacketConn, addr string) {
 		}
 
 		// time.Sleep(1 * time.Microsecond)
-		if true && time.Since(start) > 20000*time.Millisecond {
+		if true && time.Since(start) > 10000*time.Millisecond {
+			p := message.NewPrinter(language.English)
 			ch := tru.GetChannel(a)
 
-			fmt.Println("was send", i+1, "per second")
+			p.Println("was send", i+1, "packets")
 			fmt.Println("send queue size", ch.SendQueueLen())
 			fmt.Println("---")
 
@@ -133,10 +136,10 @@ func Sender(tru *tru.Tru, conn net.PacketConn, addr string) {
 				time.Sleep(1 * time.Millisecond)
 			}
 			dur := time.Since(start)
-			fmt.Println("was send", (i+1)/int(dur.Milliseconds()/1000), "packets")
-			fmt.Printf("retransmit %d, %.2f%%\n",
+			p.Println("was send", (i+1)/int(dur.Milliseconds()/1000), "packets per second")
+			p.Printf("retransmit %d, %.2f%%\n",
 				ch.Stat.Retransmit(), 100.00*float64(ch.Stat.Retransmit())/float64(i+1))
-			fmt.Println("got answers", ch.Stat.Ack())
+			p.Println("got answers", ch.Stat.Ack())
 			fmt.Println("send queue size", ch.SendQueueLen())
 			fmt.Println("trip time ", ch.Triptime())
 			fmt.Println("---")
@@ -148,6 +151,7 @@ func Sender(tru *tru.Tru, conn net.PacketConn, addr string) {
 			time.Sleep(10 * time.Second)
 			fmt.Print("\n\nsending packets continue ...\n\n")
 			start = time.Now()
+			i = 0
 		}
 	}
 }
