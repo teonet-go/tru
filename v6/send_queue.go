@@ -191,7 +191,8 @@ func (sq *sendQueue) process(conn net.PacketConn, ch *Channel) {
 
 		// Stop if time since sent packet time less than triptime + extraTime
 		if time.Since(sqd.time()) <= tt+extraTime {
-			break
+			// break
+			continue
 		}
 
 		// Stop if second element has retransmits
