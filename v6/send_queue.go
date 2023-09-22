@@ -84,7 +84,7 @@ func (sq *sendQueue) del(id uint32) (data *sendQueueData, ok bool) {
 	data, ok = sq.l.Remove(el).(*sendQueueData)
 	delete(sq.m, id)
 
-	sq.Signal()
+	// sq.Signal()
 
 	// data, ok = el.Value.(*sendQueueData)
 	return
@@ -128,8 +128,8 @@ func (sq *sendQueue) len() int {
 
 // writeDelay uses in send packets and wait whail send will be avalable
 func (sq *sendQueue) writeDelay(id uint32) {
-	sq.L.Lock()
-	defer sq.L.Unlock()
+	// sq.L.Lock()
+	// defer sq.L.Unlock()
 
 	const sleepTime = 8 * time.Microsecond
 	for {
@@ -178,9 +178,9 @@ func (sq *sendQueue) process(conn net.PacketConn, ch *Channel) {
 	var tt = ch.Triptime()
 	const extraTime = 10 * time.Millisecond
 
-	sq.RLock()
-	// for el := sq.front(); el != nil; el = sq.next(el) {
-	for el := sq.l.Front(); el != nil; el = el.Next() {
+	// sq.RLock()
+	for el := sq.front(); el != nil; el = sq.next(el) {
+	// for el := sq.l.Front(); el != nil; el = el.Next() {
 		// Get send queue data
 		sqd, ok := el.Value.(*sendQueueData)
 		if !ok {
@@ -205,14 +205,9 @@ func (sq *sendQueue) process(conn net.PacketConn, ch *Channel) {
 		sqd.setTime(time.Now())
 		sqd.incRetransmit()
 
-		// h := headerPacket{}
-		// h.UnmarshalBinary(sqd.data)
-		// _, ok = sq.get(h.id, false)
-		// log.Println("retransmit", h.id, i, ok)
-
 		i++
 	}
-	sq.RUnlock()
+	// sq.RUnlock()
 
 	time.AfterFunc(tt*1+0*time.Millisecond, func() { sq.process(conn, ch) })
 }
