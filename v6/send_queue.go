@@ -180,7 +180,7 @@ func (sq *sendQueue) process(conn net.PacketConn, ch *Channel) {
 
 	// sq.RLock()
 	for el := sq.front(); el != nil; el = sq.next(el) {
-	// for el := sq.l.Front(); el != nil; el = el.Next() {
+		// for el := sq.l.Front(); el != nil; el = el.Next() {
 		// Get send queue data
 		sqd, ok := el.Value.(*sendQueueData)
 		if !ok {
@@ -195,9 +195,9 @@ func (sq *sendQueue) process(conn net.PacketConn, ch *Channel) {
 		}
 
 		// Stop if second element has retransmits
-		if i > 0 && sqd.retransmit() > 0 {
-			break
-		}
+		// if i > 0 && sqd.retransmit() > 0 {
+		// 	break
+		// }
 
 		// Retransmit package
 		conn.WriteTo(sqd.data, ch.addr)
