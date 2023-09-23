@@ -2,11 +2,16 @@ package tru
 
 import (
 	"container/list"
+	"fmt"
 	"log"
 	"net"
 	"sync"
 	"sync/atomic"
 	"time"
+)
+
+var errPackedIdAlreadyExists = fmt.Errorf(
+	"packet with selected id already exists in the queue",
 )
 
 // sendQueue data structure and methods receiver.
@@ -63,13 +68,19 @@ func newSendQueue() *sendQueue {
 }
 
 // add adds packet to send queue
-func (sq *sendQueue) add(id uint32, data []byte) {
+func (sq *sendQueue) add(id uint32, data []byte) (err error) {
 	sq.Lock()
 	defer sq.Unlock()
+
+	if _, ok := sq.get(id, false); ok {
+		err = errPackedIdAlreadyExists
+		return
+	}
 
 	packet := &sendQueueData{data: data}
 	packet.setTime(time.Now())
 	sq.m[id] = sq.l.PushBack(packet)
+	return
 }
 
 // del removes packet from send queue by id
@@ -83,10 +94,7 @@ func (sq *sendQueue) del(id uint32) (data *sendQueueData, ok bool) {
 	}
 	data, ok = sq.l.Remove(el).(*sendQueueData)
 	delete(sq.m, id)
-
 	// sq.Signal()
-
-	// data, ok = el.Value.(*sendQueueData)
 	return
 }
 
@@ -112,6 +120,23 @@ func (sq *sendQueue) front() *list.Element {
 	return sq.l.Front()
 }
 
+// frontValue gets front elements value or mill if queue not exist
+func (sq *sendQueue) frontValue() *sendQueueData {
+	sq.RLock()
+	defer sq.RUnlock()
+
+	el := sq.l.Front()
+	if el == nil {
+		return nil
+	}
+	sqd, ok := el.Value.(*sendQueueData)
+	if !ok {
+		// TODO: wrong element can't be in send queue
+		return nil
+	}
+	return sqd
+}
+
 // next gets next element from send queue list
 func (sq *sendQueue) next(el *list.Element) *list.Element {
 	sq.RLock()
@@ -128,42 +153,38 @@ func (sq *sendQueue) len() int {
 
 // writeDelay uses in send packets and wait whail send will be avalable
 func (sq *sendQueue) writeDelay(id uint32) {
-	// sq.L.Lock()
-	// defer sq.L.Unlock()
+
+	// TODO: check if channel disconnected and return error
+
+	// TODO: check wait timeout end return error
 
 	const sleepTime = 8 * time.Microsecond
 	for {
 
-		// Wait if id already in send queue
+		// Wait input id is already exists in send queue
 		if _, ok := sq.get(id); ok {
 			time.Sleep(sleepTime)
 			continue
 		}
 
-		// Get front element
-		el := sq.front()
-		if el == nil {
-			return
+		// Get front element value and stop wait if queue is empty
+		sqd := sq.frontValue()
+		if sqd == nil {
+			break
 		}
 
-		// Get sendQueueData
-		sqd, ok := el.Value.(*sendQueueData)
-		if !ok {
-			// TODO: wrong element can't be in send queue
-			return
-		}
-
-		// Check packet retransmit counter
+		// Check packets retransmits counter and stop wait if there is not
+		// retransmits in first element
 		if sqd.retransmit() < 1 {
-			return
+			break
 		}
 
-		// Wait until can write
+		// Wait until one packet removed from sent queue
 		// sq.Wait()
 		// continue
 
 		time.Sleep(sleepTime)
-		break
+		// break
 	}
 }
 
@@ -176,9 +197,10 @@ func (sq *sendQueue) process(conn net.PacketConn, ch *Channel) {
 
 	var i int
 	var tt = ch.Triptime()
-	const extraTime = 10 * time.Millisecond
+	const extraTime = 0 * time.Millisecond
+	const checkAfter = 10 * time.Millisecond
 
-	// sq.RLock()
+	// Process queue
 	for el := sq.front(); el != nil; el = sq.next(el) {
 		// for el := sq.l.Front(); el != nil; el = el.Next() {
 		// Get send queue data
@@ -189,10 +211,10 @@ func (sq *sendQueue) process(conn net.PacketConn, ch *Channel) {
 			continue
 		}
 
-		// Stop if time since sent packet time less than triptime + extraTime
+		// Stop process if time since sent packet time less than triptime + extraTime
 		if time.Since(sqd.time()) <= tt+extraTime {
-			// break
-			continue
+			break
+			// continue
 		}
 
 		// Stop if second element has retransmits
@@ -200,7 +222,7 @@ func (sq *sendQueue) process(conn net.PacketConn, ch *Channel) {
 		// 	break
 		// }
 
-		// Retransmit package
+		// Retransmit packet
 		conn.WriteTo(sqd.data, ch.addr)
 		ch.Stat.incRetransmit()
 		sqd.setTime(time.Now())
@@ -208,7 +230,8 @@ func (sq *sendQueue) process(conn net.PacketConn, ch *Channel) {
 
 		i++
 	}
-	// sq.RUnlock()
 
-	time.AfterFunc(tt*1+0*time.Millisecond, func() { sq.process(conn, ch) })
+	// Start next process after checkAfter time
+	// time.AfterFunc(tt*1+0*time.Millisecond, func() { sq.process(conn, ch) })
+	time.AfterFunc(checkAfter, func() { sq.process(conn, ch) })
 }
