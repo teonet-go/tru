@@ -238,27 +238,27 @@ func (c *truPacketConn) readFrom( /* p []byte */ ) ( /* n int, addr net.Addr, */
 			// previouse packets
 			case dist > 0:
 				data := append([]byte{}, p[:n]...)
-				if err :=	ch.rq.add(header.id, data); err != nil {
+				if err := ch.rq.add(header.id, data); err != nil {
 					// Set channel drop statistic
 					ch.Stat.incDrop()
 				}
 
 			// Valid data packet received (id == expectedID)
 			case dist == 0:
+				// Send data packet to readChannel
 				if !readChannelBusy {
-					// Send data packet to readChannel
-					ch.newExpectedId()
-					n = n - headerLen
-					c.tru.readChannel <- readChannelData{
-						n, addr, err, append([]byte{}, p[headerLen:]...),
-					}
 					ch.Stat.incRecv()
-				} else {
-					// Drop this data packet
-					processed = false
-					if !gotFromReceiveQueue {
-						ch.setLastdata()
+					ch.newExpectedId()
+					ch.rq.delete(header.id)
+					c.tru.readChannel <- readChannelData{
+						n - headerLen, addr, nil, append([]byte{}, p[headerLen:]...),
 					}
+					break
+				}
+				// Drop this data packet
+				processed = false
+				if !gotFromReceiveQueue {
+					ch.setLastdata()
 				}
 			}
 
