@@ -22,11 +22,17 @@ func newReceiveQueue() *receiveQueue {
 }
 
 // add packet to receive queue
-func (r *receiveQueue) add(id uint32, data []byte) {
+func (r *receiveQueue) add(id uint32, data []byte) (err error) {
 	r.Lock()
 	defer r.Unlock()
 
+	if _, ok := r.get(id, false); ok {
+		err = errPackedIdAlreadyExists
+		return
+	}
+
 	r.m[id] = &receiveQueueData{data: data}
+	return
 }
 
 // delete packet from receive queue

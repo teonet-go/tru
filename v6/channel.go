@@ -1,6 +1,7 @@
 package tru
 
 import (
+	"fmt"
 	"log"
 	"net"
 	"sync/atomic"
@@ -237,6 +238,9 @@ func (ch *Channel) checkDisconnect(conn net.PacketConn) {
 		time.Since(ch.lastdata()) > disconnectAfter+pingAfter*disconnectAfterPings:
 		// log.Println(stopProcessMsg)
 		log.Printf("channel disconnected, addr: %s\n", ch.addr)
+		for id := range ch.rq.m {
+			fmt.Println(id)
+		}
 		ch.close()
 		return
 

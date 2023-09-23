@@ -237,18 +237,14 @@ func (c *truPacketConn) readFrom( /* p []byte */ ) ( /* n int, addr net.Addr, */
 			// Packet with id more than expectedID placed to receive queue and wait
 			// previouse packets
 			case dist > 0:
-				_, ok := ch.rq.get(header.id)
-				if !ok {
-					data := append([]byte{}, p[:n]...)
-					ch.rq.add(header.id, data)
-				} else {
+				data := append([]byte{}, p[:n]...)
+				if err :=	ch.rq.add(header.id, data); err != nil {
 					// Set channel drop statistic
 					ch.Stat.incDrop()
 				}
 
 			// Valid data packet received (id == expectedID)
 			case dist == 0:
-
 				if !readChannelBusy {
 					// Send data packet to readChannel
 					ch.newExpectedId()
