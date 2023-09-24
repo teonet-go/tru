@@ -11,9 +11,9 @@ import (
 const errCantCreateChannel = "can't create tru channel: %s"
 
 const (
-	readChannelLen    = 4 * 1024
-	readChannelBufLen = 2 * 1024
-	numReaders        = 4
+	readChannelLen = 4 * 1024
+	readBufLen     = 2 * 1024
+	numReaders     = 4
 )
 
 // Tru is main tru data structure and methods reciever
@@ -25,7 +25,6 @@ type Tru struct {
 	started time.Time // Tru started time
 }
 type readChannelData struct {
-	n    int
 	addr net.Addr
 	err  error
 	data []byte
@@ -124,15 +123,13 @@ func (tru *Tru) delChannel(ch *Channel) error {
 
 // getFromReceiveQueue gets saved packet with expected id from receive queue on
 // any channel
-func (tru *Tru) getFromReceiveQueue(p []byte) (n int, addr net.Addr, err error) {
-	tru.RLock()
-	defer tru.RUnlock()
+func (tru *Tru) getFromReceiveQueue() (ch *Channel, data []byte, err error) {
+	// tru.RLock()
+	// defer tru.RUnlock()
 
-	for _, ch := range tru.channels {
-		data, ok := ch.rq.process(ch)
-		if ok {
-			addr = ch.addr
-			n = copy(p, data)
+	for _, ch = range tru.channels {
+		var ok bool
+		if data, ok = ch.rq.delete(ch.expectedId()); ok {
 			return
 		}
 	}
@@ -160,36 +157,43 @@ type truPacketConn struct {
 func (c *truPacketConn) ReadFrom(p []byte) (n int, addr net.Addr, err error) {
 	// Read processed message from read go channel
 	r := <-c.tru.readChannel
-	n, addr, err = r.n, r.addr, r.err
-	copy(p, r.data)
+	addr, err = r.addr, r.err
+	n = copy(p, r.data)
 	return
 }
 
 // readFrom is reader worker
-func (c *truPacketConn) readFrom( /* p []byte */ ) ( /* n int, addr net.Addr, */ err error) {
-	p := make([]byte, readChannelBufLen)
+func (c *truPacketConn) readFrom() (err error) {
+
+	// writeToReadChannel func send data to read channel
+	writeToReadChannel := func(ch *Channel, data []byte) {
+		ch.Stat.incRecv()
+		ch.newExpectedId()
+		c.tru.readChannel <- readChannelData{ch.addr, nil, data[headerLen:]}
+	}
+
+	var n int
+	var addr net.Addr
+	var p = make([]byte, readBufLen)
 	for {
 
-		var n int
-		var addr net.Addr
-		var readChannelBusy bool = len(c.tru.readChannel) >= cap(c.tru.readChannel)
-
 		// Get saved packet with expected id from receive queue on any channel
-		var gotFromReceiveQueue bool
+		c.tru.Lock()
+		readChannelBusy := len(c.tru.readChannel) >= cap(c.tru.readChannel)
 		if !readChannelBusy {
-			n, addr, err = c.tru.getFromReceiveQueue(p)
-			if err == nil {
-				gotFromReceiveQueue = true
+			if ch, data, err := c.tru.getFromReceiveQueue(); err == nil {
+				writeToReadChannel(ch, data)
+				c.tru.Unlock()
+				continue
 			}
 		}
+		c.tru.Unlock()
 
 		// Read data from connection
-		if !gotFromReceiveQueue {
-			n, addr, err = c.conn.ReadFrom(p)
-			if err != nil {
-				log.Println("read from error:", err)
-				return
-			}
+		n, addr, err = c.conn.ReadFrom(p)
+		if err != nil {
+			log.Println("read from error:", err)
+			return
 		}
 
 		// Unmarshal header
@@ -247,23 +251,16 @@ func (c *truPacketConn) readFrom( /* p []byte */ ) ( /* n int, addr net.Addr, */
 			case dist == 0:
 				// Send data packet to readChannel
 				if !readChannelBusy {
-					ch.Stat.incRecv()
-					ch.newExpectedId()
-					ch.rq.delete(header.id)
-					c.tru.readChannel <- readChannelData{
-						n - headerLen, addr, nil, append([]byte{}, p[headerLen:]...),
-					}
+					writeToReadChannel(ch, append([]byte{}, p[:n]...))
 					break
 				}
 				// Drop this data packet
 				processed = false
-				if !gotFromReceiveQueue {
-					ch.setLastdata()
-				}
+				ch.setLastdata()
 			}
 
 			// Send answer
-			if !gotFromReceiveQueue && processed {
+			if processed {
 				data, _ := headerPacket{header.id, pAck}.MarshalBinary()
 				c.conn.WriteTo(data, addr)
 				ch.setLastdata()

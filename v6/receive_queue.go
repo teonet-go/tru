@@ -69,10 +69,10 @@ func (r *receiveQueue) len() int {
 	return len(r.m)
 }
 
-// process finds packets in receive queue, returts paket data and ok if found, 
+// process finds packets in receive queue, returts paket data and ok if found,
 // and remove packet from receive queue
-func (r *receiveQueue) process(ch *Channel) (data []byte, ok bool) {
-	id := ch.expectedId()
-	data, ok = r.delete(id)
-	return
-}
+// func (r *receiveQueue) process(ch *Channel) (data []byte, ok bool) {
+// 	id := ch.expectedId()
+// 	data, ok = r.delete(id)
+// 	return
+// }
