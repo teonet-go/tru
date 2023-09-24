@@ -13,7 +13,7 @@ const errCantCreateChannel = "can't create tru channel: %s"
 const (
 	readChannelLen = 4 * 1024
 	readBufLen     = 2 * 1024
-	numReaders     = 4
+	numReaders     = 1 // 4
 )
 
 // Tru is main tru data structure and methods reciever
@@ -63,7 +63,7 @@ func New(printStat bool) *Tru {
 // parameters.
 func (tru *Tru) ListenPacket(network, address string) (net.PacketConn, error) {
 	conn, err := net.ListenPacket(network, address)
-	truConn := &truPacketConn{conn: conn, tru: tru}
+	truConn := &truPacketConn{conn: conn, tru: tru, Mutex: new(sync.Mutex)}
 	for i := 0; i < numReaders; i++ {
 		go truConn.readFrom()
 	}
@@ -124,8 +124,8 @@ func (tru *Tru) delChannel(ch *Channel) error {
 // getFromReceiveQueue gets saved packet with expected id from receive queue on
 // any channel
 func (tru *Tru) getFromReceiveQueue() (ch *Channel, data []byte, err error) {
-	// tru.RLock()
-	// defer tru.RUnlock()
+	tru.RLock()
+	defer tru.RUnlock()
 
 	for _, ch = range tru.channels {
 		var ok bool
@@ -143,6 +143,7 @@ func (tru *Tru) getFromReceiveQueue() (ch *Channel, data []byte, err error) {
 type truPacketConn struct {
 	conn net.PacketConn
 	tru  *Tru
+	*sync.Mutex
 }
 
 // ReadFrom reads a packet from the connection,
@@ -172,22 +173,24 @@ func (c *truPacketConn) readFrom() (err error) {
 		c.tru.readChannel <- readChannelData{ch.addr, nil, data[headerLen:]}
 	}
 
+	readChannelBusy := func() bool { return len(c.tru.readChannel) >= cap(c.tru.readChannel) }
+
 	var n int
 	var addr net.Addr
 	var p = make([]byte, readBufLen)
 	for {
 
 		// Get saved packet with expected id from receive queue on any channel
-		c.tru.Lock()
-		readChannelBusy := len(c.tru.readChannel) >= cap(c.tru.readChannel)
-		if !readChannelBusy {
+		// c.Lock()
+		// readChannelBusy := len(c.tru.readChannel) >= cap(c.tru.readChannel)
+		if !readChannelBusy() {
 			if ch, data, err := c.tru.getFromReceiveQueue(); err == nil {
 				writeToReadChannel(ch, data)
-				c.tru.Unlock()
+				// c.Unlock()
 				continue
 			}
 		}
-		c.tru.Unlock()
+		// c.Unlock()
 
 		// Read data from connection
 		n, addr, err = c.conn.ReadFrom(p)
@@ -217,6 +220,7 @@ func (c *truPacketConn) readFrom() (err error) {
 		ch.setLastpacket()
 
 		// Send tru answer or process answer depend of header type
+		// c.Lock()
 		switch header.ptype {
 
 		// Data received
@@ -230,6 +234,7 @@ func (c *truPacketConn) readFrom() (err error) {
 			var processed = true
 
 			// Check expected id distance
+			// c.Lock()
 			dist := ch.distance(header.id)
 			switch {
 
@@ -249,24 +254,27 @@ func (c *truPacketConn) readFrom() (err error) {
 
 			// Valid data packet received (id == expectedID)
 			case dist == 0:
-				// Check is the packet is in receive queue
-				if _, ok := ch.rq.get(header.id); ok {
-					// Set channel drop statistic
+
+				// Drop this data packet if read channel is busy
+				if readChannelBusy() {
+					processed = false
+					ch.setLastdata()
+					break
+				}
+
+				// Check if the packet is in receive queue
+				if _, ok := ch.rq.del(header.id); ok {
 					log.Printf(
 						"duplicate of packet %d was in the received queue\n",
 						header.id,
 					)
 					ch.Stat.incDrop()
 				}
+
 				// Send data packet to readChannel
-				if !readChannelBusy {
-					writeToReadChannel(ch, append([]byte{}, p[:n]...))
-					break
-				}
-				// Drop this data packet
-				processed = false
-				ch.setLastdata()
+				writeToReadChannel(ch, append([]byte{}, p[:n]...))
 			}
+			// c.Unlock()
 
 			// Send answer
 			if processed {
@@ -296,6 +304,7 @@ func (c *truPacketConn) readFrom() (err error) {
 		// pPong (ping answer) received
 		case pPong:
 		}
+		// c.Unlock()
 	}
 }
 

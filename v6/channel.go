@@ -10,7 +10,7 @@ import (
 
 const (
 	// Packet ID limit from 0 to packetIDLimit-1
-	packetIDLimit = 0x100000
+	packetIDLimit = 0x1000000
 
 	// Send ping after pingAfter time if no packet received
 	pingAfter = 5000 * time.Millisecond
