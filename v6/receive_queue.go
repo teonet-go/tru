@@ -16,45 +16,45 @@ type receiveQueueData struct {
 
 // newReceiveQueue creates a new receive queue object
 func newReceiveQueue() *receiveQueue {
-	r := new(receiveQueue)
-	r.m = make(map[uint32]*receiveQueueData)
-	return r
+	rq := new(receiveQueue)
+	rq.m = make(map[uint32]*receiveQueueData)
+	return rq
 }
 
 // add packet to receive queue
-func (r *receiveQueue) add(id uint32, data []byte) (err error) {
-	r.Lock()
-	defer r.Unlock()
+func (rq *receiveQueue) add(id uint32, data []byte) (err error) {
+	rq.Lock()
+	defer rq.Unlock()
 
-	if _, ok := r.get(id, false); ok {
+	if _, ok := rq.get(id, false); ok {
 		err = errPackedIdAlreadyExists
 		return
 	}
 
-	r.m[id] = &receiveQueueData{data: data}
+	rq.m[id] = &receiveQueueData{data: data}
 	return
 }
 
-// delete packet from receive queue
-func (r *receiveQueue) delete(id uint32) (data []byte, ok bool) {
-	r.Lock()
-	defer r.Unlock()
+// del packet from receive queue
+func (rq *receiveQueue) del(id uint32) (data []byte, ok bool) {
+	rq.Lock()
+	defer rq.Unlock()
 
-	data, ok = r.get(id, false)
+	data, ok = rq.get(id, false)
 	if ok {
-		delete(r.m, uint32(id))
+		delete(rq.m, uint32(id))
 	}
 	return
 }
 
 // get packet from receive queue
-func (r *receiveQueue) get(id uint32, lock ...bool) (data []byte, ok bool) {
+func (rq *receiveQueue) get(id uint32, lock ...bool) (data []byte, ok bool) {
 	if len(lock) == 0 || lock[0] {
-		r.RLock()
-		defer r.RUnlock()
+		rq.RLock()
+		defer rq.RUnlock()
 	}
 
-	rqd, ok := r.m[id]
+	rqd, ok := rq.m[id]
 	if ok {
 		data = rqd.data
 	}
@@ -62,17 +62,17 @@ func (r *receiveQueue) get(id uint32, lock ...bool) (data []byte, ok bool) {
 }
 
 // len return receive queue len
-func (r *receiveQueue) len() int {
-	r.RLock()
-	defer r.RUnlock()
+func (rq *receiveQueue) len() int {
+	rq.RLock()
+	defer rq.RUnlock()
 
-	return len(r.m)
+	return len(rq.m)
 }
 
 // process finds packets in receive queue, returts paket data and ok if found,
 // and remove packet from receive queue
-// func (r *receiveQueue) process(ch *Channel) (data []byte, ok bool) {
+// func (rq *receiveQueue) process(ch *Channel) (data []byte, ok bool) {
 // 	id := ch.expectedId()
-// 	data, ok = r.delete(id)
+// 	data, ok = rq.del(id)
 // 	return
 // }

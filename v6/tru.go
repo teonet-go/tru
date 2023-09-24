@@ -129,7 +129,7 @@ func (tru *Tru) getFromReceiveQueue() (ch *Channel, data []byte, err error) {
 
 	for _, ch = range tru.channels {
 		var ok bool
-		if data, ok = ch.rq.delete(ch.expectedId()); ok {
+		if data, ok = ch.rq.del(ch.expectedId()); ok {
 			return
 		}
 	}
@@ -249,6 +249,15 @@ func (c *truPacketConn) readFrom() (err error) {
 
 			// Valid data packet received (id == expectedID)
 			case dist == 0:
+				// Check is the packet is in receive queue
+				if _, ok := ch.rq.get(header.id); ok {
+					// Set channel drop statistic
+					log.Printf(
+						"duplicate of packet %d was in the received queue\n",
+						header.id,
+					)
+					ch.Stat.incDrop()
+				}
 				// Send data packet to readChannel
 				if !readChannelBusy {
 					writeToReadChannel(ch, append([]byte{}, p[:n]...))
