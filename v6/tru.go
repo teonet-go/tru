@@ -13,7 +13,7 @@ const errCantCreateChannel = "can't create tru channel: %s"
 const (
 	readChannelLen = 4 * 1024
 	readBufLen     = 2 * 1024
-	numReaders     = 1 // 4
+	numReaders     = 4
 )
 
 // Tru is main tru data structure and methods reciever
@@ -173,6 +173,7 @@ func (c *truPacketConn) readFrom() (err error) {
 		c.tru.readChannel <- readChannelData{ch.addr, nil, data[headerLen:]}
 	}
 
+	// readChannelBusy func returns true if read channel is busy
 	readChannelBusy := func() bool { return len(c.tru.readChannel) >= cap(c.tru.readChannel) }
 
 	var n int
@@ -181,16 +182,15 @@ func (c *truPacketConn) readFrom() (err error) {
 	for {
 
 		// Get saved packet with expected id from receive queue on any channel
-		// c.Lock()
-		// readChannelBusy := len(c.tru.readChannel) >= cap(c.tru.readChannel)
-		if !readChannelBusy() {
-			if ch, data, err := c.tru.getFromReceiveQueue(); err == nil {
-				writeToReadChannel(ch, data)
-				// c.Unlock()
-				continue
+		c.Lock()
+		for !readChannelBusy() {
+			ch, data, err := c.tru.getFromReceiveQueue()
+			if err != nil {
+				break
 			}
+			writeToReadChannel(ch, data)
 		}
-		// c.Unlock()
+		c.Unlock()
 
 		// Read data from connection
 		n, addr, err = c.conn.ReadFrom(p)
