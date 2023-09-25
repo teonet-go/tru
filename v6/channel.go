@@ -29,13 +29,14 @@ const (
 // Channel data structure and methods receiver
 type Channel struct {
 	// conn  net.PacketConn             // Network connection
-	addr  net.Addr                      // Channel Remote address
-	sq    *sendQueue                    // Channel Send Queue
-	rq    *receiveQueue                 // Channel Receive Queue
-	id    int32                         // Packet id (to send packet)
-	expId int32                         // Packet expected id (to receive packet)
-	att   atomic.Pointer[time.Duration] // Channel Triptime
-	close func()                        // CLose this channel func
+	addr        net.Addr                      // Channel Remote address
+	sq          *sendQueue                    // Channel Send Queue
+	rq          *receiveQueue                 // Channel Receive Queue
+	id          int32                         // Packet id (to send packet)
+	expId       int32                         // Packet expected id (to receive packet)
+	att         atomic.Pointer[time.Duration] // Channel Triptime
+	close       func()                        // CLose this channel func
+	processChan chan processChanData          // Channel
 
 	// Statistics data (atomic vars) and methods
 	Stat ChannelStat
@@ -48,6 +49,8 @@ type Channel struct {
 	closedFlag  int32                     // Channel closed atomic bool flag
 }
 
+type processChanData []byte // Channel
+
 // ChannelStat contains statistics data (atomic vars) and methods to work with it
 type ChannelStat struct {
 	sent       uint64 // Number of data packets sent
@@ -59,23 +62,34 @@ type ChannelStat struct {
 }
 
 // newChannel creates new tru channel
-func newChannel(conn net.PacketConn, addr string, close func()) (ch *Channel, err error) {
-	ch = new(Channel)
+func newChannel(tru *Tru, conn net.PacketConn, addr string, close func()) (ch *Channel, err error) {
+
+	if tru == nil {
+		err = fmt.Errorf("tru can't be nil")
+		return
+	}
+
+	var a net.Addr
+	if len(addr) > 0 {
+		if a, err = net.ResolveUDPAddr("udp", addr); err != nil {
+			return
+		}
+	}
+	ch = &Channel{addr: a, close: close}
+
 	ch.setLastdata()
-	ch.close = close
 	ch.setLastpacket()
 	ch.sq = newSendQueue()
 	ch.rq = newReceiveQueue()
 	ch.setTriptime(1 * time.Millisecond)
-	if len(addr) > 0 {
-		ch.addr, err = net.ResolveUDPAddr("udp", addr)
-		if err != nil {
-			return
-		}
-	}
+	ch.processChan = make(chan processChanData, 16)
+
+	go ch.process(tru, conn)
 	go ch.sq.process(conn, ch)
 	go ch.checkDisconnect(conn)
+
 	log.Printf("channel ctreated, addr: %s\n", ch.addr)
+
 	return
 }
 
@@ -254,4 +268,132 @@ func (ch *Channel) checkDisconnect(conn net.PacketConn) {
 	}
 
 	time.AfterFunc(pingRepeat, func() { ch.checkDisconnect(conn) })
+}
+
+// process gets received packets from processChan and process it
+func (ch *Channel) process(tru *Tru, conn net.PacketConn) (err error) {
+
+	// writeToReadChannel func send data to read channel
+	writeToReadChannel := func(data []byte) {
+		ch.Stat.incRecv()
+		ch.newExpectedId()
+		tru.readChannel <- readChannelData{ch.addr, nil, data[headerLen:]}
+	}
+
+	// readChannelBusy func returns true if read channel is busy
+	readChannelBusy := func() bool { return len(tru.readChannel) >= cap(tru.readChannel) }
+
+	// processReceiveQueue gets packets from receiveQueue and sends it to read channel
+	processReceiveQueue := func() {
+		for !readChannelBusy() {
+			data, ok := ch.rq.del(ch.expectedId())
+			if !ok {
+				break
+			}
+			writeToReadChannel(data)
+		}
+	}
+
+	for data := range ch.processChan {
+
+		processReceiveQueue()
+
+		// Unmarshal header
+		header := headerPacket{}
+		err = header.UnmarshalBinary(data)
+		if err != nil {
+			// TODO: print some message if wrong header received?
+			continue
+		}
+
+		// Set last packet received time
+		ch.setLastpacket()
+
+		// Send tru answer or process answer depend of header type
+		switch header.ptype {
+
+		// Data received
+		case pData:
+
+			// TODO: Check this code again: May be we need to lock this code
+			// because we check expected id in distance func and change it befor
+			// send data to readChannel in newExpectedId() func. And we have
+			// some number of workers which read connection an the same time.
+
+			var processed = true
+
+			// Check expected id distance
+			dist := ch.distance(header.id)
+			switch {
+
+			// Already processed packet (id < expectedID)
+			case dist < 0:
+				// Set channel drop statistic
+				ch.Stat.incDrop()
+
+			// Packet with id more than expectedID placed to receive queue and wait
+			// previouse packets
+			case dist > 0:
+				if err := ch.rq.add(header.id, data); err != nil {
+					// Set channel drop statistic
+					ch.Stat.incDrop()
+				}
+
+			// Valid data packet received (id == expectedID)
+			case dist == 0:
+
+				// Drop this data packet if read channel is busy
+				if readChannelBusy() {
+					processed = false
+					ch.setLastdata()
+					break
+				}
+
+				// TODO: maybe remove this check in new realisation?
+				// Check if the packet is in receive queue
+				// if _, ok := ch.rq.del(header.id); ok {
+				// 	log.Printf(
+				// 		"duplicate of packet %d was in the received queue\n",
+				// 		header.id,
+				// 	)
+				// 	ch.Stat.incDrop()
+				// }
+
+				// Send data packet to readChannel and Process recive queue
+				writeToReadChannel(data)
+				processReceiveQueue()
+			}
+			// c.Unlock()
+
+			// Send answer
+			if processed {
+				data, _ := headerPacket{header.id, pAck}.MarshalBinary()
+				conn.WriteTo(data, ch.addr)
+				ch.setLastdata()
+			}
+
+		// Answer to data packet (acknowledgement) received
+		case pAck:
+			// Save answer statistic, calculate triptime and remove package from
+			// send queue
+			ch.setLastdata()
+
+			if pac, ok := ch.sq.del(header.id); ok {
+				ch.calcTriptime(pac)
+				ch.Stat.incAck()
+			} else {
+				ch.Stat.incAckd()
+			}
+
+		// Ping received
+		case pPing:
+			data, _ := headerPacket{0, pPong}.MarshalBinary()
+			conn.WriteTo(data, ch.addr)
+
+		// pPong (ping answer) received
+		case pPong:
+		}
+	}
+
+	return
 }

@@ -64,9 +64,9 @@ func New(printStat bool) *Tru {
 func (tru *Tru) ListenPacket(network, address string) (net.PacketConn, error) {
 	conn, err := net.ListenPacket(network, address)
 	truConn := &truPacketConn{conn: conn, tru: tru, Mutex: new(sync.Mutex)}
-	for i := 0; i < numReaders; i++ {
-		go truConn.readFrom()
-	}
+	//for i := 0; i < numReaders; i++ {
+	go truConn.readFrom()
+	//}
 	return truConn, err
 }
 
@@ -91,13 +91,13 @@ func (tru *Tru) newChannel(conn net.PacketConn, addr net.Addr) (ch *Channel, err
 	// Get string address
 	addrStr := addr.String()
 
-	// CHeck channel exists and return existing channel
+	// Check channel exists and return existing channel
 	if ch, ok := tru.channels[addrStr]; ok {
 		return ch, nil
 	}
 
 	// Create new channel and add it to channels map
-	ch, err = newChannel(conn, addrStr, func() { tru.delChannel(ch) })
+	ch, err = newChannel(tru, conn, addrStr, func() { tru.delChannel(ch) })
 	if err != nil {
 		return nil, err
 	}
@@ -117,24 +117,9 @@ func (tru *Tru) delChannel(ch *Channel) error {
 	}
 
 	delete(tru.channels, addr)
+	close(ch.processChan)
 	ch.setClosed()
 	return nil
-}
-
-// getFromReceiveQueue gets saved packet with expected id from receive queue on
-// any channel
-func (tru *Tru) getFromReceiveQueue() (ch *Channel, data []byte, err error) {
-	tru.RLock()
-	defer tru.RUnlock()
-
-	for _, ch = range tru.channels {
-		var ok bool
-		if data, ok = ch.rq.del(ch.expectedId()); ok {
-			return
-		}
-	}
-	err = fmt.Errorf("packet not found")
-	return
 }
 
 // truPacketConn is a generic packet-oriented network connection.
@@ -166,45 +151,14 @@ func (c *truPacketConn) ReadFrom(p []byte) (n int, addr net.Addr, err error) {
 // readFrom is reader worker
 func (c *truPacketConn) readFrom() (err error) {
 
-	// writeToReadChannel func send data to read channel
-	writeToReadChannel := func(ch *Channel, data []byte) {
-		ch.Stat.incRecv()
-		ch.newExpectedId()
-		c.tru.readChannel <- readChannelData{ch.addr, nil, data[headerLen:]}
-	}
-
-	// readChannelBusy func returns true if read channel is busy
-	readChannelBusy := func() bool { return len(c.tru.readChannel) >= cap(c.tru.readChannel) }
-
-	var n int
-	var addr net.Addr
 	var p = make([]byte, readBufLen)
+
 	for {
-
-		// Get saved packet with expected id from receive queue on any channel
-		c.Lock()
-		for !readChannelBusy() {
-			ch, data, err := c.tru.getFromReceiveQueue()
-			if err != nil {
-				break
-			}
-			writeToReadChannel(ch, data)
-		}
-		c.Unlock()
-
 		// Read data from connection
-		n, addr, err = c.conn.ReadFrom(p)
+		n, addr, err := c.conn.ReadFrom(p)
 		if err != nil {
 			log.Println("read from error:", err)
-			return
-		}
-
-		// Unmarshal header
-		header := headerPacket{}
-		err = header.UnmarshalBinary(p)
-		if err != nil {
-			// TODO: print some message if wrong header received?
-			continue
+			return err
 		}
 
 		// Get or create channel
@@ -216,96 +170,11 @@ func (c *truPacketConn) readFrom() (err error) {
 			continue
 		}
 
-		// Set last packet received time
-		ch.setLastpacket()
-
-		// Send tru answer or process answer depend of header type
-		// c.Lock()
-		switch header.ptype {
-
-		// Data received
-		case pData:
-
-			// TODO: Check this code again: May be we need to lock this code
-			// because we check expected id in distance func and change it befor
-			// send data to readChannel in newExpectedId() func. And we have
-			// some number of workers which read connection an the same time.
-
-			var processed = true
-
-			// Check expected id distance
-			// c.Lock()
-			dist := ch.distance(header.id)
-			switch {
-
-			// Already processed packet (id < expectedID)
-			case dist < 0:
-				// Set channel drop statistic
-				ch.Stat.incDrop()
-
-			// Packet with id more than expectedID placed to receive queue and wait
-			// previouse packets
-			case dist > 0:
-				data := append([]byte{}, p[:n]...)
-				if err := ch.rq.add(header.id, data); err != nil {
-					// Set channel drop statistic
-					ch.Stat.incDrop()
-				}
-
-			// Valid data packet received (id == expectedID)
-			case dist == 0:
-
-				// Drop this data packet if read channel is busy
-				if readChannelBusy() {
-					processed = false
-					ch.setLastdata()
-					break
-				}
-
-				// Check if the packet is in receive queue
-				if _, ok := ch.rq.del(header.id); ok {
-					log.Printf(
-						"duplicate of packet %d was in the received queue\n",
-						header.id,
-					)
-					ch.Stat.incDrop()
-				}
-
-				// Send data packet to readChannel
-				writeToReadChannel(ch, append([]byte{}, p[:n]...))
-			}
-			// c.Unlock()
-
-			// Send answer
-			if processed {
-				data, _ := headerPacket{header.id, pAck}.MarshalBinary()
-				c.conn.WriteTo(data, addr)
-				ch.setLastdata()
-			}
-
-		// Answer to data packet (acknowledgement) received
-		case pAck:
-			// Save answer statistic, calculate triptime and remove package from
-			// send queue
-			ch.setLastdata()
-
-			if pac, ok := ch.sq.del(header.id); ok {
-				ch.calcTriptime(pac)
-				ch.Stat.incAck()
-			} else {
-				ch.Stat.incAckd()
-			}
-
-		// Ping received
-		case pPing:
-			data, _ := headerPacket{0, pPong}.MarshalBinary()
-			c.conn.WriteTo(data, addr)
-
-		// pPong (ping answer) received
-		case pPong:
-		}
-		// c.Unlock()
+		// Send received data to process channel
+		ch.processChan <- append([]byte{}, p[:n]...)
 	}
+
+	// return
 }
 
 // WriteTo writes a packet with payload p to addr.
