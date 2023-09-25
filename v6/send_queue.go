@@ -226,7 +226,7 @@ func (sq *sendQueue) process(conn net.PacketConn, ch *Channel) {
 		// Retransmit packet
 		conn.WriteTo(sqd.data, ch.addr)
 		ch.Stat.incRetransmit()
-		sqd.setTime(time.Now())
+		// sqd.setTime(time.Now())
 		sqd.incRetransmit()
 
 		i++
