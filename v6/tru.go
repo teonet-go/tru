@@ -11,9 +11,28 @@ import (
 const errCantCreateChannel = "can't create tru channel: %s"
 
 const (
-	readChannelLen = 4 * 1024
+
+	// Basic constants
+
+	readChannelLen = 0 // 4 * 1024
 	readBufLen     = 2 * 1024
 	numReaders     = 4
+
+	// Tuning constants
+
+	// Check send queue retransmits every sqCheckAfter.
+	sqCheckAfter = 10 * time.Millisecond
+
+	// Send queue wait ack to data packets extra time (triptime + extraTime).
+	sqWaitPacketExtraTime = 0 * time.Millisecond
+
+	// If packet retransmits happend then: Calculate trip time from first send
+	// of this packet if true or from last retransmit if false.
+	ttFromFirstSend = true
+
+	// When claculate triptime uses ttCalcMiddle last packets to get moddle
+	// triptime.
+	ttCalcMiddle = 10
 )
 
 // Tru is main tru data structure and methods reciever
@@ -116,10 +135,31 @@ func (tru *Tru) delChannel(ch *Channel) error {
 		return fmt.Errorf("channel does not exists")
 	}
 
-	delete(tru.channels, addr)
-	close(ch.processChan)
 	ch.setClosed()
+	close(ch.processChan)
+	delete(tru.channels, addr)
+
 	return nil
+}
+
+// type channels chan channelsData
+type channelsData struct {
+	addr string
+	ch   *Channel
+}
+
+// delChannel removes selected Tru channel or return error if does not exist
+func (tru *Tru) listChannels() chan channelsData {
+	chs := make(chan channelsData)
+	go func() {
+		tru.RLock()
+		defer tru.RUnlock()
+		for addr, ch := range tru.channels {
+			chs <- channelsData{addr, ch}
+		}
+		close(chs)
+	}()
+	return chs
 }
 
 // truPacketConn is a generic packet-oriented network connection.
@@ -169,8 +209,11 @@ func (c *truPacketConn) readFrom() (err error) {
 			// TODO: print some message if can't create ot get channel?
 			continue
 		}
+		if ch.closed() {
+			continue
+		}
 
-		// Send received data to process channel
+		// Send received data to process channel (safe to channel closed)
 		ch.processChan <- append([]byte{}, p[:n]...)
 	}
 
@@ -200,7 +243,7 @@ func (c *truPacketConn) WriteTo(p []byte, addr net.Addr) (n int, err error) {
 	data = append(data, p...)
 
 	// Wait until send avalable and the same id removed from send queue
-	ch.sq.writeDelay(id)
+	ch.sq.writeDelay(ch, id)
 
 	// Write to udp
 	n, err = c.conn.WriteTo(data, addr)

@@ -152,41 +152,47 @@ func (sq *sendQueue) len() int {
 }
 
 // writeDelay uses in send packets and wait whail send will be avalable
-func (sq *sendQueue) writeDelay(id uint32) {
+func (sq *sendQueue) writeDelay(ch *Channel, id uint32) {
 
 	// TODO: check if channel disconnected and return error
 
 	// TODO: check wait timeout end return error
 
-	const sleepTime = 8 * time.Microsecond
-	for {
+	const sleepTime = 1 * time.Microsecond
 
-		// Wait input id is already exists in send queue
-		if _, ok := sq.get(id); ok {
-			time.Sleep(sleepTime)
-			continue
-		}
-
-		// Get front element value and stop wait if queue is empty
-		sqd := sq.frontValue()
-		if sqd == nil {
-			break
-		}
-
-		// Check packets retransmits counter and stop wait if there is not
-		// retransmits in first element
-		rts := sqd.retransmit()
-		if rts < 1 {
-			break
-		}
-
-		// Wait until one packet removed from sent queue
-		// sq.Wait()
-		// continue
-
-		time.Sleep(time.Duration(rts) * sleepTime)
-		break
+	incDelay := func() {
+		ch.senddelay += sleepTime
 	}
+
+	decDelay := func() {
+		if ch.senddelay >= sleepTime {
+			ch.senddelay -= sleepTime
+		}
+	}
+
+	// Number of retransmits
+	ret := ch.Stat.Retransmit()
+	if ret > ch.Stat.retrprev {
+		incDelay()
+	} else {
+		decDelay()
+	}
+	ch.Stat.retrprev = ret
+
+	// Waits if the input id exists in the send queue
+	for {
+		if _, ok := sq.get(id); !ok {
+			break
+		}
+		time.Sleep(sleepTime)
+	}
+
+	delay := ch.senddelay - time.Since(ch.lastsendpac)
+	if delay > 0 {
+		time.Sleep(delay)
+	}
+
+	ch.lastsendpac = time.Now()
 }
 
 // process send queue
@@ -198,12 +204,9 @@ func (sq *sendQueue) process(conn net.PacketConn, ch *Channel) {
 
 	var i int
 	var tt = ch.Triptime()
-	const extraTime = 0 * time.Millisecond
-	const checkAfter = 10 * time.Millisecond
 
 	// Process retransmit elements in queue
 	for el := sq.front(); el != nil; el = sq.next(el) {
-		// for el := sq.l.Front(); el != nil; el = el.Next() {
 		// Get send queue data
 		sqd, ok := el.Value.(*sendQueueData)
 		if !ok {
@@ -213,7 +216,7 @@ func (sq *sendQueue) process(conn net.PacketConn, ch *Channel) {
 		}
 
 		// Stop process if time since sent packet less than triptime + extraTime
-		if time.Since(sqd.time()) <= tt+extraTime {
+		if time.Since(sqd.time()) <= tt+sqWaitPacketExtraTime {
 			break
 			// continue
 		}
@@ -225,14 +228,16 @@ func (sq *sendQueue) process(conn net.PacketConn, ch *Channel) {
 
 		// Retransmit packet
 		conn.WriteTo(sqd.data, ch.addr)
-		ch.Stat.incRetransmit()
-		// sqd.setTime(time.Now())
 		sqd.incRetransmit()
+		ch.Stat.incRetransmit()
+		if !ttFromFirstSend {
+			sqd.setTime(time.Now())
+		}
 
 		i++
 	}
 
 	// Start next process after checkAfter time
 	// time.AfterFunc(tt*1+0*time.Millisecond, func() { sq.process(conn, ch) })
-	time.AfterFunc(checkAfter, func() { sq.process(conn, ch) })
+	time.AfterFunc(sqCheckAfter, func() { sq.process(conn, ch) })
 }

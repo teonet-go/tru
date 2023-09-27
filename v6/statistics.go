@@ -39,13 +39,15 @@ func (tru *Tru) printstat() {
 		var numRows = 0
 		l := term.Func.ClearLine() + strings.Repeat("-", 125)
 
-		for addr, ch := range tru.channels {
+		for chd := range tru.listChannels() {
 			table += "\n"
 			table += term.Func.ClearLine() + fmt.Sprintf(
-				"%-17.17s %9d %7d %6d %12d %6d %12d %7d %6d %5d %5d %5d %7d %7.3f",
-				addr, ch.Stat.Sent(), 0, ch.Stat.Retransmit(), ch.Stat.Ack(),
-				ch.Stat.Ackd(), ch.Stat.Recv(), 0, ch.Stat.Drop(), ch.sq.len(),
-				ch.rq.len(), 0, 0, float64(ch.Triptime().Microseconds())/1000.0,
+				"%-17.17s %9d %7d %6d %12d %6d %12d %7d %6d %5d %5d %5d %7.3f %7.3f",
+				chd.addr, chd.ch.Stat.Sent(), 0, chd.ch.Stat.Retransmit(), chd.ch.Stat.Ack(),
+				chd.ch.Stat.Ackd(), chd.ch.Stat.Recv(), 0, chd.ch.Stat.Drop(), chd.ch.sq.len(),
+				chd.ch.rq.len(), 0, 
+				float64(chd.ch.senddelay.Microseconds())/1000.0,
+				float64(chd.ch.Triptime().Microseconds())/1000.0,
 			)
 			numRows++
 		}

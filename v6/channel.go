@@ -45,6 +45,8 @@ type Channel struct {
 
 	lastpac     atomic.Pointer[time.Time] // Last packet received time
 	lastdatapac atomic.Pointer[time.Time] // Last Data packet or Answer received time
+	lastsendpac time.Time                 // Last Data packet send time
+	senddelay   time.Duration             // Send delay
 	lastping    time.Time                 // Last Ping packet send time
 	closedFlag  int32                     // Channel closed atomic bool flag
 }
@@ -57,6 +59,7 @@ type ChannelStat struct {
 	ack        uint64 // Number of packets answer (acknowledgement) received
 	ackd       uint64 // Number of dropped packets answer (acknowledgement)
 	retransmit uint64 // Number of packets data retransmited
+	retrprev   uint64 // Previouse retransmits value
 	recv       uint64 // Number of data packets received
 	drop       uint64 // Number of dropped received data packets
 }
@@ -82,6 +85,7 @@ func newChannel(tru *Tru, conn net.PacketConn, addr string, close func()) (ch *C
 	ch.sq = newSendQueue()
 	ch.rq = newReceiveQueue()
 	ch.setTriptime(1 * time.Millisecond)
+	// ch.senddelay = 10 * time.Microsecond
 	ch.processChan = make(chan processChanData, 16)
 
 	go ch.process(tru, conn)
@@ -143,9 +147,8 @@ func (ch *Channel) Triptime() time.Duration { return *ch.att.Load() }
 
 // calcTriptime calculates new timestamp
 func (ch *Channel) calcTriptime(pac *sendQueueData) {
-	const n = 10
 	tt := ch.Triptime()
-	tt = (tt*(n-1) + time.Since(pac.time())) / n
+	tt = (tt*(ttCalcMiddle-1) + time.Since(pac.time())) / ttCalcMiddle
 	ch.setTriptime(tt)
 }
 
@@ -252,9 +255,6 @@ func (ch *Channel) checkDisconnect(conn net.PacketConn) {
 		time.Since(ch.lastdata()) > disconnectAfter+pingAfter*disconnectAfterPings:
 		// log.Println(stopProcessMsg)
 		log.Printf("channel disconnected, addr: %s\n", ch.addr)
-		for id := range ch.rq.m {
-			fmt.Println(id)
-		}
 		ch.close()
 		return
 
@@ -274,29 +274,47 @@ func (ch *Channel) checkDisconnect(conn net.PacketConn) {
 func (ch *Channel) process(tru *Tru, conn net.PacketConn) (err error) {
 
 	// writeToReadChannel func send data to read channel
-	writeToReadChannel := func(data []byte) {
-		ch.Stat.incRecv()
-		ch.newExpectedId()
-		tru.readChannel <- readChannelData{ch.addr, nil, data[headerLen:]}
-	}
+	writeToReadChannel := func(data []byte, wait bool) bool {
 
-	// readChannelBusy func returns true if read channel is busy
-	readChannelBusy := func() bool { return len(tru.readChannel) >= cap(tru.readChannel) }
+		if wait {
+			tru.readChannel <- readChannelData{ch.addr, nil, data[headerLen:]}
+			ch.Stat.incRecv()
+			ch.newExpectedId()
+			return true
+		}
+
+		select {
+		case tru.readChannel <- readChannelData{ch.addr, nil, data[headerLen:]}:
+			ch.Stat.incRecv()
+			ch.newExpectedId()
+			return true
+		default:
+			return false
+		}
+	}
 
 	// processReceiveQueue gets packets from receiveQueue and sends it to read channel
 	processReceiveQueue := func() {
-		for !readChannelBusy() {
-			data, ok := ch.rq.del(ch.expectedId())
+		// readChannelBusy func returns true if read channel is busy
+		// readChannelBusy := func() bool { return len(tru.readChannel) >= cap(tru.readChannel) }
+		for id := ch.expectedId(); ; id = ch.expectedId() {
+			data, ok := ch.rq.del(id)
 			if !ok {
 				break
 			}
-			writeToReadChannel(data)
+			// for !writeToReadChannel(data) {
+			// 	// can't write to read channel, restore id in receive queue
+			// 	// ch.rq.add(id, data)
+			// 	time.Sleep(8 * time.Microsecond)
+			// 	// break
+			// }
+			writeToReadChannel(data, true)
 		}
 	}
 
 	for data := range ch.processChan {
 
-		processReceiveQueue()
+		// processReceiveQueue()
 
 		// Unmarshal header
 		header := headerPacket{}
@@ -342,28 +360,14 @@ func (ch *Channel) process(tru *Tru, conn net.PacketConn) (err error) {
 			// Valid data packet received (id == expectedID)
 			case dist == 0:
 
-				// Drop this data packet if read channel is busy
-				if readChannelBusy() {
+				// Send data packet to readChannel and Process receive queue
+				if !writeToReadChannel(data, false) {
 					processed = false
 					ch.setLastdata()
 					break
 				}
-
-				// TODO: maybe remove this check in new realisation?
-				// Check if the packet is in receive queue
-				// if _, ok := ch.rq.del(header.id); ok {
-				// 	log.Printf(
-				// 		"duplicate of packet %d was in the received queue\n",
-				// 		header.id,
-				// 	)
-				// 	ch.Stat.incDrop()
-				// }
-
-				// Send data packet to readChannel and Process recive queue
-				writeToReadChannel(data)
 				processReceiveQueue()
 			}
-			// c.Unlock()
 
 			// Send answer
 			if processed {
