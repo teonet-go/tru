@@ -2,10 +2,12 @@
 package main
 
 import (
+	"bufio"
 	"flag"
 	"fmt"
 	"log"
 	"net"
+	"os"
 	"time"
 
 	"github.com/teonet-go/tru/v6"
@@ -24,6 +26,7 @@ var addr = flag.String("a", "", "remote address to connect to")
 var stat = flag.Bool("stat", false, "print statistic")
 var nomsg = flag.Bool("nomsg", false, "do not show sending and receiving messages")
 var noansw = flag.Bool("noansw", false, "do not send answers in server mode")
+var nowait = flag.Bool("nowait", false, "do not wait after 10 sec of send")
 
 // var ch *tru.Channel
 
@@ -92,7 +95,8 @@ func Listen(conn net.PacketConn) {
 
 		// Send answer in server mode
 		if len(*addr) == 0 && !*noansw {
-			d := append([]byte("answer to "), data[:n]...)
+			// d := append([]byte("answer to "), data[:n]...)
+			d := data[:n]
 			conn.WriteTo(d, a)
 			if !*nomsg {
 				log.Printf("send answer: %s\n", d[:n])
@@ -145,10 +149,12 @@ func Sender(tru *tru.Tru, conn net.PacketConn, addr string) {
 			fmt.Println("---")
 			fmt.Println("real time", dur)
 
-			// time.Sleep(5 * time.Second)
-			// os.Exit(0)
-			// select {}
-			time.Sleep(10 * time.Second)
+			if !*nowait {
+				fmt.Print("\n press enter to continue -> ")
+				reader := bufio.NewReader(os.Stdin)
+				reader.ReadString('\n')
+			}
+
 			fmt.Print("\n\nsending packets continue ...\n\n")
 			start = time.Now()
 			i = 0

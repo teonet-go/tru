@@ -51,18 +51,7 @@ type Channel struct {
 	closedFlag  int32                     // Channel closed atomic bool flag
 }
 
-type processChanData []byte // Channel
-
-// ChannelStat contains statistics data (atomic vars) and methods to work with it
-type ChannelStat struct {
-	sent       uint64 // Number of data packets sent
-	ack        uint64 // Number of packets answer (acknowledgement) received
-	ackd       uint64 // Number of dropped packets answer (acknowledgement)
-	retransmit uint64 // Number of packets data retransmited
-	retrprev   uint64 // Previouse retransmits value
-	recv       uint64 // Number of data packets received
-	drop       uint64 // Number of dropped received data packets
-}
+type processChanData []byte // Process channel data
 
 // newChannel creates new tru channel
 func newChannel(tru *Tru, conn net.PacketConn, addr string, close func()) (ch *Channel, err error) {
@@ -84,8 +73,8 @@ func newChannel(tru *Tru, conn net.PacketConn, addr string, close func()) (ch *C
 	ch.setLastpacket()
 	ch.sq = newSendQueue()
 	ch.rq = newReceiveQueue()
-	ch.setTriptime(1 * time.Millisecond)
-	// ch.senddelay = 10 * time.Microsecond
+	ch.setTriptime(0 * time.Millisecond)
+	ch.senddelay = 0 * time.Microsecond
 	ch.processChan = make(chan processChanData, 16)
 
 	go ch.process(tru, conn)
@@ -121,35 +110,19 @@ func (ch *Channel) distance(id uint32) int {
 	return int(diff - packetIDLimit)
 }
 
-// Ack returns answer (acknowledgement) counter value
-func (ch *ChannelStat) Ack() uint64 { return atomic.LoadUint64(&ch.ack) }
-
-// ackd returns dropped answer (acknowledgement) counter value
-func (ch *ChannelStat) Ackd() uint64 { return atomic.LoadUint64(&ch.ackd) }
-
-// Sent returns data packet sent counter value
-func (ch *ChannelStat) Sent() uint64 { return atomic.LoadUint64(&ch.sent) }
-
-// Recv returns data packet received counter value
-func (ch *ChannelStat) Recv() uint64 { return atomic.LoadUint64(&ch.recv) }
-
-// Drop returns number of droppet received data packets (duplicate data packets)
-func (ch *ChannelStat) Drop() uint64 { return atomic.LoadUint64(&ch.drop) }
-
 // SendQueueLen returns send queue length
 func (ch *Channel) SendQueueLen() int { return ch.sq.len() }
-
-// Retransmit returns retransmit counter value
-func (ch *ChannelStat) Retransmit() uint64 { return atomic.LoadUint64(&ch.retransmit) }
 
 // Triptime gets channel triptime
 func (ch *Channel) Triptime() time.Duration { return *ch.att.Load() }
 
 // calcTriptime calculates new timestamp
-func (ch *Channel) calcTriptime(pac *sendQueueData) {
+func (ch *Channel) calcTriptime(sqd *sendQueueData) {
 	tt := ch.Triptime()
-	tt = (tt*(ttCalcMiddle-1) + time.Since(pac.time())) / ttCalcMiddle
-	ch.setTriptime(tt)
+	if sqd.retransmit() == 0 {
+		tt = (tt*(ttCalcMiddle-1) + time.Since(sqd.time())) / ttCalcMiddle
+		ch.setTriptime(tt)
+	}
 }
 
 // setTriptime sets channel triptime
@@ -168,24 +141,6 @@ func (ch *Channel) lastdata() time.Time { return *ch.lastdatapac.Load() }
 
 // setLastdata sets last Data or Answer packet received time.
 func (ch *Channel) setLastdata() { now := time.Now(); ch.lastdatapac.Store(&now) }
-
-// incAck increments answers (acknowledgement) counter value
-func (ch *ChannelStat) incAck() { atomic.AddUint64(&ch.ack, 1) }
-
-// incAckd increments dropped answers (acknowledgement) counter value
-func (ch *ChannelStat) incAckd() { atomic.AddUint64(&ch.ackd, 1) }
-
-// incSent increments send data peckets counter value
-func (ch *ChannelStat) incSent() { atomic.AddUint64(&ch.sent, 1) }
-
-// incRecv increments received data peckets counter value
-func (ch *ChannelStat) incRecv() { atomic.AddUint64(&ch.recv, 1) }
-
-// incDrop increments dropped data peckets counter value
-func (ch *ChannelStat) incDrop() { atomic.AddUint64(&ch.drop, 1) }
-
-// incAnswer increments retransmit counter value
-func (ch *ChannelStat) incRetransmit() { atomic.AddUint64(&ch.retransmit, 1) }
 
 // expectedId gets expected id
 func (ch *Channel) expectedId() uint32 { return uint32(atomic.LoadInt32(&ch.expId) % packetIDLimit) }
@@ -251,8 +206,9 @@ func (ch *Channel) checkDisconnect(conn net.PacketConn) {
 	// Disconnect this channel in channel does not send data and does not answer
 	// to ping or
 	// Disconnect if channel does not send data and ping time expired
-	case time.Since(ch.lastpacket()) > disconnectAfter, disconnectAfterPings > 0 &&
-		time.Since(ch.lastdata()) > disconnectAfter+pingAfter*disconnectAfterPings:
+	case time.Since(ch.lastpacket()) > disconnectAfter,
+		disconnectAfterPings > 0 &&
+			time.Since(ch.lastdata()) > disconnectAfter+pingAfter*disconnectAfterPings:
 		// log.Println(stopProcessMsg)
 		log.Printf("channel disconnected, addr: %s\n", ch.addr)
 		ch.close()
@@ -302,12 +258,14 @@ func (ch *Channel) process(tru *Tru, conn net.PacketConn) (err error) {
 			if !ok {
 				break
 			}
-			// for !writeToReadChannel(data) {
+
+			// for !writeToReadChannel(data, false) {
 			// 	// can't write to read channel, restore id in receive queue
-			// 	// ch.rq.add(id, data)
-			// 	time.Sleep(8 * time.Microsecond)
+			// 	ch.rq.add(id, data)
+			// 	// time.Sleep(8 * time.Microsecond)
 			// 	// break
 			// }
+
 			writeToReadChannel(data, true)
 		}
 	}
@@ -360,7 +318,8 @@ func (ch *Channel) process(tru *Tru, conn net.PacketConn) (err error) {
 			// Valid data packet received (id == expectedID)
 			case dist == 0:
 
-				// Send data packet to readChannel and Process receive queue
+				// Send data packet to readChannel and Process receive queue or
+				// reject this data packet if read channel full
 				if !writeToReadChannel(data, false) {
 					processed = false
 					ch.setLastdata()

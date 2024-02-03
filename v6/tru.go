@@ -2,7 +2,6 @@ package tru
 
 import (
 	"fmt"
-	"log"
 	"net"
 	"sync"
 	"time"
@@ -14,14 +13,14 @@ const (
 
 	// Basic constants
 
-	readChannelLen = 0 // 4 * 1024
+	readChannelLen = 1 * 1024
 	readBufLen     = 2 * 1024
 	numReaders     = 4
 
 	// Tuning constants
 
 	// Check send queue retransmits every sqCheckAfter.
-	sqCheckAfter = 10 * time.Millisecond
+	sqCheckAfter = 30 * time.Millisecond
 
 	// Send queue wait ack to data packets extra time (triptime + extraTime).
 	sqWaitPacketExtraTime = 0 * time.Millisecond
@@ -82,10 +81,13 @@ func New(printStat bool) *Tru {
 // parameters.
 func (tru *Tru) ListenPacket(network, address string) (net.PacketConn, error) {
 	conn, err := net.ListenPacket(network, address)
-	truConn := &truPacketConn{conn: conn, tru: tru, Mutex: new(sync.Mutex)}
-	//for i := 0; i < numReaders; i++ {
-	go truConn.readFrom()
-	//}
+	if err != nil {
+		return nil, err
+	}
+	truConn := &PacketConn{conn: conn, tru: tru, Mutex: new(sync.Mutex)}
+	for i := 0; i < numReaders; i++ {
+		go truConn.readFrom()
+	}
 	return truConn, err
 }
 
@@ -134,10 +136,10 @@ func (tru *Tru) delChannel(ch *Channel) error {
 	if _, ok := tru.channels[addr]; !ok {
 		return fmt.Errorf("channel does not exists")
 	}
+	delete(tru.channels, addr)
 
 	ch.setClosed()
 	close(ch.processChan)
-	delete(tru.channels, addr)
 
 	return nil
 }
@@ -161,100 +163,3 @@ func (tru *Tru) listChannels() chan channelsData {
 	}()
 	return chs
 }
-
-// truPacketConn is a generic packet-oriented network connection.
-//
-// Multiple goroutines may invoke methods on a PacketConn simultaneously.
-type truPacketConn struct {
-	conn net.PacketConn
-	tru  *Tru
-	*sync.Mutex
-}
-
-// ReadFrom reads a packet from the connection,
-// copying the payload into p. It returns the number of
-// bytes copied into p and the return address that
-// was on the packet.
-// It returns the number of bytes read (0 <= n <= len(p))
-// and any error encountered. Callers should always process
-// the n > 0 bytes returned before considering the error err.
-// ReadFrom can be made to time out and return an error after a
-// fixed time limit; see SetDeadline and SetReadDeadline.
-func (c *truPacketConn) ReadFrom(p []byte) (n int, addr net.Addr, err error) {
-	// Read processed message from read go channel
-	r := <-c.tru.readChannel
-	addr, err = r.addr, r.err
-	n = copy(p, r.data)
-	return
-}
-
-// readFrom is reader worker
-func (c *truPacketConn) readFrom() (err error) {
-
-	var p = make([]byte, readBufLen)
-
-	for {
-		// Read data from connection
-		n, addr, err := c.conn.ReadFrom(p)
-		if err != nil {
-			log.Println("read from error:", err)
-			return err
-		}
-
-		// Get or create channel
-		var ch *Channel
-		ch, err = c.tru.newChannel(c.conn, addr)
-		if err != nil {
-			err = fmt.Errorf(errCantCreateChannel, err)
-			// TODO: print some message if can't create ot get channel?
-			continue
-		}
-		if ch.closed() {
-			continue
-		}
-
-		// Send received data to process channel (safe to channel closed)
-		ch.processChan <- append([]byte{}, p[:n]...)
-	}
-
-	// return
-}
-
-// WriteTo writes a packet with payload p to addr.
-// WriteTo can be made to time out and return an Error after a
-// fixed time limit; see SetDeadline and SetWriteDeadline.
-// On packet-oriented connections, write timeouts are rare.
-func (c *truPacketConn) WriteTo(p []byte, addr net.Addr) (n int, err error) {
-
-	// Get or create tru channel
-	var ch *Channel
-	ch, err = c.tru.newChannel(c.conn, addr)
-	if err != nil {
-		err = fmt.Errorf(errCantCreateChannel, err)
-		return
-	}
-
-	// Get new packet id and create packet header
-	id := ch.newId()
-	data, err := headerPacket{id, pData}.MarshalBinary()
-	if err != nil {
-		return
-	}
-	data = append(data, p...)
-
-	// Wait until send avalable and the same id removed from send queue
-	ch.sq.writeDelay(ch, id)
-
-	// Write to udp
-	n, err = c.conn.WriteTo(data, addr)
-	n -= headerLen
-	func() { ch.sq.add(id, data); ch.Stat.incSent() }()
-
-	return
-}
-
-func (c *truPacketConn) Close() error                       { return c.conn.Close() }
-func (c *truPacketConn) LocalAddr() net.Addr                { return c.conn.LocalAddr() }
-func (c *truPacketConn) SetDeadline(t time.Time) error      { return c.conn.SetDeadline(t) }
-func (c *truPacketConn) SetReadDeadline(t time.Time) error  { return c.conn.SetReadDeadline(t) }
-func (c *truPacketConn) SetWriteDeadline(t time.Time) error { return c.conn.SetWriteDeadline(t) }

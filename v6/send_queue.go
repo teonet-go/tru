@@ -21,7 +21,7 @@ var errPackedIdAlreadyExists = fmt.Errorf(
 type sendQueue struct {
 	m             sendQueueMap // Send queue map by packet id
 	l             list.List    // List of elements in order of arrival
-	wait                       // Waits while front element has retransmits
+	wait                       // Waits while front element has retransmits (not used)
 	*sync.RWMutex              // Mutex to protect parameters
 }
 type sendQueueMap map[uint32]*list.Element
@@ -161,7 +161,7 @@ func (sq *sendQueue) writeDelay(ch *Channel, id uint32) {
 	const sleepTime = 1 * time.Microsecond
 
 	incDelay := func() {
-		ch.senddelay += sleepTime
+		ch.senddelay += sleepTime * 2
 	}
 
 	decDelay := func() {
