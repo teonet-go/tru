@@ -110,8 +110,11 @@ func (ch *Channel) distance(id uint32) int {
 	return int(diff - packetIDLimit)
 }
 
-// SendQueueLen returns send queue length
+// SendQueueLen returns send queue length.
 func (ch *Channel) SendQueueLen() int { return ch.sq.len() }
+
+// ReceiveQueueLen returns receive queue length.
+func (ch *Channel) ReceiveQueueLen() int { return ch.rq.len() }
 
 // Triptime gets channel triptime
 func (ch *Channel) Triptime() time.Duration { return *ch.att.Load() }
@@ -307,8 +310,8 @@ func (ch *Channel) process(tru *Tru, conn net.PacketConn) (err error) {
 				// Set channel drop statistic
 				ch.Stat.incDrop()
 
-			// Packet with id more than expectedID placed to receive queue and wait
-			// previouse packets
+			// Packet with id more than expectedID placed to receive queue and
+			// wait for previouse packets
 			case dist > 0:
 				if err := ch.rq.add(header.id, data); err != nil {
 					// Set channel drop statistic
@@ -320,11 +323,13 @@ func (ch *Channel) process(tru *Tru, conn net.PacketConn) (err error) {
 
 				// Send data packet to readChannel and Process receive queue or
 				// reject this data packet if read channel full
-				if !writeToReadChannel(data, false) {
-					processed = false
-					ch.setLastdata()
-					break
-				}
+				// if !writeToReadChannel(data, false) {
+				// 	processed = false
+				// 	ch.setLastdata()
+				// 	fmt.Println("skip", len(tru.readChannel))
+				// 	break
+				// }
+				writeToReadChannel(data, true)
 				processReceiveQueue()
 			}
 

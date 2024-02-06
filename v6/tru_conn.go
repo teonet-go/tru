@@ -60,7 +60,8 @@ func (c *PacketConn) readFrom() (err error) {
 
 		// Send received data to process channel (safe send on closed channel)
 		if ch.closed() || safeSend(ch.processChan, append([]byte{}, p[:n]...)) {
-			log.Println("send on closed channel")
+			log.Println("send on closed or busy channel, channel length:",
+				len(ch.processChan))
 			continue
 		}
 
@@ -110,6 +111,17 @@ func (c *PacketConn) WriteTo(p []byte, addr net.Addr) (n int, err error) {
 	func() { ch.sq.add(id, data); ch.Stat.incSent() }()
 
 	return
+}
+
+// WriteToNoWait sends a packet with payload p to addr without waiting. 
+// Use it in server responses to client requests.
+func WriteToNoWait(conn net.PacketConn, p []byte, addr net.Addr, f ...func(n int, err error)) {
+	go func() {
+		n, err := conn.WriteTo(p, addr)
+		if len(f) > 0 {
+			f[0](n, err)
+		}
+	}()
 }
 
 func (c *PacketConn) Close() error                       { return c.conn.Close() }

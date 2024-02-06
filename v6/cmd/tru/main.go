@@ -27,6 +27,7 @@ var stat = flag.Bool("stat", false, "print statistic")
 var nomsg = flag.Bool("nomsg", false, "do not show sending and receiving messages")
 var noansw = flag.Bool("noansw", false, "do not send answers in server mode")
 var nowait = flag.Bool("nowait", false, "do not wait after 10 sec of send")
+var delay = flag.Int("delay", 0, "send delay")
 
 // var ch *tru.Channel
 
@@ -95,12 +96,13 @@ func Listen(conn net.PacketConn) {
 
 		// Send answer in server mode
 		if len(*addr) == 0 && !*noansw {
-			// d := append([]byte("answer to "), data[:n]...)
 			d := data[:n]
-			conn.WriteTo(d, a)
-			if !*nomsg {
-				log.Printf("send answer: %s\n", d[:n])
-			}
+			// conn.WriteTo(d, a)
+			tru.WriteToNoWait(conn, d, a, func(n int, err error) {
+				if !*nomsg {
+					log.Printf("send answer: %s\n", d[:n])
+				}
+			})
 		}
 	}
 }
@@ -114,6 +116,7 @@ func Sender(tru *tru.Tru, conn net.PacketConn, addr string) {
 	if err != nil {
 		log.Fatal(err)
 	}
+
 	start := time.Now()
 	for i := 0; ; i++ {
 
@@ -127,37 +130,40 @@ func Sender(tru *tru.Tru, conn net.PacketConn, addr string) {
 			log.Printf("send %d to %s, data: %s\n", n, a.String(), data[:n])
 		}
 
-		// time.Sleep(1 * time.Microsecond)
-		if true && time.Since(start) > 10000*time.Millisecond {
+		if *delay > 0 {
+			time.Sleep(time.Duration(*delay) * time.Microsecond)
+		}
+
+		if !*nowait && time.Since(start) > 10000*time.Millisecond {
 			p := message.NewPrinter(language.English)
 			ch := tru.GetChannel(a)
 
 			p.Println("was send", i+1, "packets")
 			fmt.Println("send queue size", ch.SendQueueLen())
+			fmt.Println("receive queue size", ch.ReceiveQueueLen())
 			fmt.Println("---")
 
 			for ch.SendQueueLen() > 0 {
 				time.Sleep(1 * time.Millisecond)
 			}
 			dur := time.Since(start)
-			p.Println("was send", (i+1)/int(dur.Milliseconds()/1000), "packets per second")
-			p.Printf("retransmit %d, %.2f%%\n",
-				ch.Stat.Retransmit(), 100.00*float64(ch.Stat.Retransmit())/float64(i+1))
+			p.Println("sending speed", float64(i+1)/(float64(dur.Milliseconds())/1000.00),
+				"packets per second")
+			p.Printf("retransmit %d packets, %.2f%%\n", ch.Stat.Retransmit(),
+				100.00*float64(ch.Stat.Retransmit())/float64(i+1))
 			p.Println("got answers", ch.Stat.Ack())
 			fmt.Println("send queue size", ch.SendQueueLen())
 			fmt.Println("trip time ", ch.Triptime())
 			fmt.Println("---")
 			fmt.Println("real time", dur)
 
-			if !*nowait {
-				fmt.Print("\n press enter to continue -> ")
-				reader := bufio.NewReader(os.Stdin)
-				reader.ReadString('\n')
-			}
+			fmt.Print("\n press enter to continue -> ")
+			reader := bufio.NewReader(os.Stdin)
+			reader.ReadString('\n')
 
 			fmt.Print("\n\nsending packets continue ...\n\n")
 			start = time.Now()
-			i = 0
+			i = -1
 		}
 	}
 }
