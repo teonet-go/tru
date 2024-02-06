@@ -27,7 +27,7 @@ var stat = flag.Bool("stat", false, "print statistic")
 var nomsg = flag.Bool("nomsg", false, "do not show sending and receiving messages")
 var noansw = flag.Bool("noansw", false, "do not send answers in server mode")
 var nowait = flag.Bool("nowait", false, "do not wait after 10 sec of send")
-var delay = flag.Int("delay", 0, "send delay")
+var delay = flag.Int("delay", 1, "send delay")
 
 // var ch *tru.Channel
 
@@ -117,6 +117,7 @@ func Sender(tru *tru.Tru, conn net.PacketConn, addr string) {
 		log.Fatal(err)
 	}
 
+	const waitTime = 10 * time.Second
 	start := time.Now()
 	for i := 0; ; i++ {
 
@@ -134,7 +135,7 @@ func Sender(tru *tru.Tru, conn net.PacketConn, addr string) {
 			time.Sleep(time.Duration(*delay) * time.Microsecond)
 		}
 
-		if !*nowait && time.Since(start) > 10000*time.Millisecond {
+		if !*nowait && time.Since(start) > waitTime {
 			p := message.NewPrinter(language.English)
 			ch := tru.GetChannel(a)
 
@@ -147,8 +148,7 @@ func Sender(tru *tru.Tru, conn net.PacketConn, addr string) {
 				time.Sleep(1 * time.Millisecond)
 			}
 			dur := time.Since(start)
-			p.Println("sending speed", float64(i+1)/(float64(dur.Milliseconds())/1000.00),
-				"packets per second")
+			p.Printf("sending speed %.3f packets/s\n", float64(i+1)/(float64(dur.Milliseconds())/1000.00))
 			p.Printf("retransmit %d packets, %.2f%%\n", ch.Stat.Retransmit(),
 				100.00*float64(ch.Stat.Retransmit())/float64(i+1))
 			p.Println("got answers", ch.Stat.Ack())

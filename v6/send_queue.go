@@ -158,7 +158,10 @@ func (sq *sendQueue) writeDelay(ch *Channel, id uint32) {
 
 	// TODO: check wait timeout end return error
 
-	const sleepTime = 1 * time.Microsecond
+	const (
+		sleepTime    = 1 * time.Microsecond
+		minSleepTime = 0 * time.Microsecond
+	)
 
 	incDelay := func() {
 		ch.senddelay += sleepTime * 2
@@ -188,9 +191,12 @@ func (sq *sendQueue) writeDelay(ch *Channel, id uint32) {
 	}
 
 	delay := ch.senddelay - time.Since(ch.lastsendpac)
-	if delay > 0 {
-		time.Sleep(delay)
+	if delay < minSleepTime {
+		delay = minSleepTime
 	}
+	// if delay > 0 {
+	time.Sleep(delay)
+	// }
 
 	ch.lastsendpac = time.Now()
 }

@@ -23,7 +23,7 @@ const (
 	sqCheckAfter = 30 * time.Millisecond
 
 	// Send queue wait ack to data packets extra time (triptime + extraTime).
-	sqWaitPacketExtraTime = 0 * time.Millisecond
+	sqWaitPacketExtraTime = 250 * time.Millisecond // 250ms
 
 	// If packet retransmits happend then: Calculate trip time from first send
 	// of this packet if true or from last retransmit if false.
