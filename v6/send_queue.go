@@ -171,7 +171,7 @@ func (sq *sendQueue) writeDelay(ch *Channel, id uint32) {
 		if ch.senddelay >= sleepTime {
 			ch.senddelay -= sleepTime
 		} else {
-			ch.senddelay = 0
+			ch.senddelay = minSleepTime
 		}
 	}
 
@@ -195,10 +195,9 @@ func (sq *sendQueue) writeDelay(ch *Channel, id uint32) {
 	delay := ch.senddelay - time.Since(ch.lastsendpac)
 	if delay < minSleepTime {
 		delay = minSleepTime
+		ch.senddelay = delay
 	}
-	// if delay > 0 {
 	time.Sleep(delay)
-	// }
 
 	ch.lastsendpac = time.Now()
 }

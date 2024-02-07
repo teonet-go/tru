@@ -42,14 +42,14 @@ func (tru *Tru) printstat() {
 		for chd := range tru.listChannels() {
 			table += "\n"
 			table += term.Func.ClearLine() + fmt.Sprintf(
-				"%-17.17s %9d %7d %6d %12d %6d %12d %7d %6d %5d %5d %5d %7.3f %7.3f",
+				"%-17.17s %9d %7d %6d %12d %6d %12d %7d %6d %5d %5d %5d %7.4f %7.3f",
 				chd.addr, chd.ch.Stat.Sent(), chd.ch.Stat.SentSpeed(),
 				chd.ch.Stat.Retransmit(), chd.ch.Stat.Ack(),
 				chd.ch.Stat.Ackd(), 
 				chd.ch.Stat.Recv(), chd.ch.Stat.RecvSpeed(), 
 				chd.ch.Stat.Drop(), chd.ch.sq.len(),
 				chd.ch.rq.len(), 0,
-				float64(chd.ch.senddelay.Microseconds())/1000.0,
+				float64(chd.ch.senddelay.Nanoseconds())/1000000.0,
 				float64(chd.ch.Triptime().Microseconds())/1000.0,
 			)
 			numRows++
