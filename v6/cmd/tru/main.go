@@ -97,12 +97,10 @@ func Listen(conn net.PacketConn) {
 		// Send answer in server mode
 		if len(*addr) == 0 && !*noansw {
 			d := data[:n]
-			// conn.WriteTo(d, a)
-			tru.WriteToNoWait(conn, d, a, func(n int, err error) {
-				if !*nomsg {
-					log.Printf("send answer: %s\n", d[:n])
-				}
-			})
+			n, err := tru.WriteToNoWait(conn, d, a)
+			if !*nomsg && err == nil {
+				log.Printf("send answer: %s\n", d[:n])
+			}
 		}
 	}
 }
@@ -137,7 +135,16 @@ func Sender(tru *tru.Tru, conn net.PacketConn, addr string) {
 
 		if !*nowait && time.Since(start) > waitTime {
 			p := message.NewPrinter(language.English)
-			ch := tru.GetChannel(a)
+			ch, err := tru.GetChannel(a)
+			if err != nil {
+				fmt.Printf(
+					"can't get channel by addr %s, error: %s\n",
+					a.String(), err,
+				)
+				start = time.Now()
+				i = -1
+				continue
+			}
 
 			p.Println("was send", i+1, "packets")
 			fmt.Println("send queue size", ch.SendQueueLen())

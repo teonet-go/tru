@@ -85,6 +85,12 @@ func safeSend[T any](ch chan T, value T) (closed bool) {
 // fixed time limit; see SetDeadline and SetWriteDeadline.
 // On packet-oriented connections, write timeouts are rare.
 func (c *PacketConn) WriteTo(p []byte, addr net.Addr) (n int, err error) {
+	return c.writeTo(p, addr, true)
+}
+
+// writeTo writes with delay if wait is true or without delay.
+func (c *PacketConn) writeTo(p []byte, addr net.Addr, wait bool) (n int,
+	err error) {
 
 	// Get or create tru channel
 	var ch *Channel
@@ -103,7 +109,9 @@ func (c *PacketConn) WriteTo(p []byte, addr net.Addr) (n int, err error) {
 	data = append(data, p...)
 
 	// Wait until send avalable and the same id removed from send queue
-	ch.sq.writeDelay(ch, id)
+	if wait {
+		ch.sq.writeDelay(ch, id)
+	}
 
 	// Write to udp
 	n, err = c.conn.WriteTo(data, addr)
@@ -113,15 +121,14 @@ func (c *PacketConn) WriteTo(p []byte, addr net.Addr) (n int, err error) {
 	return
 }
 
-// WriteToNoWait sends a packet with payload p to addr without waiting. 
+// WriteToNoWait sends a packet with payload p to addr without waiting.
 // Use it in server responses to client requests.
-func WriteToNoWait(conn net.PacketConn, p []byte, addr net.Addr, f ...func(n int, err error)) {
-	go func() {
-		n, err := conn.WriteTo(p, addr)
-		if len(f) > 0 {
-			f[0](n, err)
-		}
-	}()
+func WriteToNoWait(conn net.PacketConn, p []byte, addr net.Addr) (int, error) {
+	c, ok := conn.(*PacketConn)
+	if !ok {
+		return 0, fmt.Errorf("wrong connection type: %T", conn)
+	}
+	return c.writeTo(p, addr, false)
 }
 
 func (c *PacketConn) Close() error                       { return c.conn.Close() }

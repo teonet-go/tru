@@ -35,6 +35,8 @@ const (
 	ttCalcMiddle = 10
 )
 
+var ErrChannelDoesNotExist = fmt.Errorf("channel does not exist")
+
 // Tru is main tru data structure and methods reciever
 type Tru struct {
 	channels      // Channels map
@@ -92,17 +94,17 @@ func (tru *Tru) ListenPacket(network, address string) (net.PacketConn, error) {
 	return truConn, err
 }
 
-// GetChannel gets Tru channel by addr
-func (tru *Tru) GetChannel(addr net.Addr) *Channel {
+// GetChannel gets Tru channel by addr.
+func (tru *Tru) GetChannel(addr net.Addr) (*Channel, error) {
 	tru.RLock()
 	defer tru.RUnlock()
 
 	ch, ok := tru.channels[addr.String()]
 	if !ok {
-		return nil
+		return nil, ErrChannelDoesNotExist
 	}
 
-	return ch
+	return ch, nil
 }
 
 // newChannel creates new Tru channel with addr or return existing
@@ -135,7 +137,7 @@ func (tru *Tru) delChannel(ch *Channel) error {
 
 	addr := ch.addr.String()
 	if _, ok := tru.channels[addr]; !ok {
-		return fmt.Errorf("channel does not exists")
+		return ErrChannelDoesNotExist
 	}
 	delete(tru.channels, addr)
 
