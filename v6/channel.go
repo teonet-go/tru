@@ -69,6 +69,7 @@ func newChannel(tru *Tru, conn net.PacketConn, addr string, close func()) (ch *C
 	}
 	ch = &Channel{addr: a, close: close}
 
+	ch.Stat.init()
 	ch.setLastdata()
 	ch.setLastpacket()
 	ch.sq = newSendQueue()
