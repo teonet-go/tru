@@ -157,11 +157,11 @@ func Sender(tru *tru.Tru, conn net.PacketConn, addr string) {
 			fmt.Println("---")
 			fmt.Println("real time", dur)
 
-			fmt.Print("\n press enter to continue -> ")
+			fmt.Print("\npress enter to continue -> ")
 			reader := bufio.NewReader(os.Stdin)
 			reader.ReadString('\n')
 
-			fmt.Print("\n\nsending packets continue ...\n\n")
+			fmt.Print("\n\nsending packets ...\n\n")
 			start = time.Now()
 			i = -1
 		}

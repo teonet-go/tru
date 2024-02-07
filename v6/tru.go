@@ -3,6 +3,7 @@ package tru
 import (
 	"fmt"
 	"net"
+	"sort"
 	"sync"
 	"time"
 )
@@ -29,7 +30,7 @@ const (
 	// of this packet if true or from last retransmit if false.
 	ttFromFirstSend = true
 
-	// When claculate triptime uses ttCalcMiddle last packets to get moddle
+	// When claculate triptime uses ttCalcMiddle last packets to get middle
 	// triptime.
 	ttCalcMiddle = 10
 )
@@ -150,16 +151,30 @@ type channelsData struct {
 	ch   *Channel
 }
 
-// delChannel removes selected Tru channel or return error if does not exist
+// listChannels returns Tru channelsData channel which contains all Tru channels.
 func (tru *Tru) listChannels() chan channelsData {
+	tru.RLock()
+	defer tru.RUnlock()
+
+	// Get channels slice
 	chs := make(chan channelsData)
+	var chanels []channelsData
+	for addr, ch := range tru.channels {
+		chanels = append(chanels, channelsData{addr, ch})
+	}
+
+	// Sort channels slice
+	sort.Slice(chanels, func(i, j int) bool {
+		return chanels[i].addr < chanels[j].addr
+	})
+
+	// Send channels to output channel
 	go func() {
-		tru.RLock()
-		defer tru.RUnlock()
-		for addr, ch := range tru.channels {
-			chs <- channelsData{addr, ch}
+		for _, c := range chanels {
+			chs <- channelsData{c.addr, c.ch}
 		}
 		close(chs)
 	}()
+
 	return chs
 }
