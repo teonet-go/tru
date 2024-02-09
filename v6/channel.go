@@ -54,7 +54,8 @@ type Channel struct {
 type processChanData []byte // Process channel data
 
 // newChannel creates new tru channel
-func newChannel(tru *Tru, conn net.PacketConn, addr string, close func()) (ch *Channel, err error) {
+func newChannel(tru *Tru, conn net.PacketConn, addr string, close func()) (
+	ch *Channel, err error) {
 
 	if tru == nil {
 		err = fmt.Errorf("tru can't be nil")
@@ -122,9 +123,10 @@ func (ch *Channel) Triptime() time.Duration { return *ch.att.Load() }
 
 // calcTriptime calculates new timestamp
 func (ch *Channel) calcTriptime(sqd *sendQueueData) {
-	tt := ch.Triptime()
 	if sqd.retransmit() == 0 {
-		tt = (tt*(ttCalcMiddle-1) + time.Since(sqd.time())) / ttCalcMiddle
+		ttCalcMiddle := time.Duration(ch.Stat.SentSpeed())
+		tt := ch.Triptime()
+		tt = (tt*(ttCalcMiddle) + time.Since(sqd.time())) / (ttCalcMiddle + 1)
 		ch.setTriptime(tt)
 	}
 }

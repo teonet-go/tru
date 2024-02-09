@@ -19,10 +19,11 @@ var errPackedIdAlreadyExists = fmt.Errorf(
 // Send queue store sent packets data and sent time untile the answer packet
 // received.
 type sendQueue struct {
-	m             sendQueueMap // Send queue map by packet id
-	l             list.List    // List of elements in order of arrival
-	wait                       // Waits while front element has retransmits (not used)
-	*sync.RWMutex              // Mutex to protect parameters
+	m             sendQueueMap  // Send queue map by packet id
+	l             list.List     // List of elements in order of arrival
+	wait                        // Waits while front element has retransmits (not used)
+	delay         time.Duration // Write delay (middle)
+	*sync.RWMutex               // Mutex to protect parameters
 }
 type sendQueueMap map[uint32]*list.Element
 
@@ -159,12 +160,20 @@ func (sq *sendQueue) writeDelay(ch *Channel, id uint32) {
 	// TODO: check wait timeout end return error
 
 	const (
-		sleepTime    = 10 * time.Microsecond
+		sleepTime    = 100 * time.Microsecond
 		minSleepTime = 500 * time.Nanosecond
 	)
 
+	midleDelay := func(d time.Duration) time.Duration {
+		// return d
+		var numPackets = time.Duration(ch.Stat.SentSpeed())
+		sq.delay = (d + sq.delay*numPackets) / (numPackets + 1)
+		return sq.delay
+	}
+
 	incDelay := func() {
 		ch.senddelay += sleepTime * 10
+		ch.senddelay = midleDelay(ch.senddelay)
 	}
 
 	decDelay := func() {
@@ -173,6 +182,7 @@ func (sq *sendQueue) writeDelay(ch *Channel, id uint32) {
 		} else {
 			ch.senddelay = minSleepTime
 		}
+		ch.senddelay = midleDelay(ch.senddelay)
 	}
 
 	// Number of retransmits
