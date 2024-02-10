@@ -27,7 +27,7 @@ var stat = flag.Bool("stat", false, "print statistic")
 var nomsg = flag.Bool("nomsg", false, "do not show sending and receiving messages")
 var noansw = flag.Bool("noansw", false, "do not send answers in server mode")
 var nowait = flag.Bool("nowait", false, "do not wait after 10 sec of send")
-var delay = flag.Int("delay", 0, "send delay")
+var delay = flag.Int("delay", 0, "send delay in nanoseconds")
 
 // var ch *tru.Channel
 
@@ -129,7 +129,7 @@ func Sender(tru *tru.Tru, conn net.PacketConn, addr string) {
 		}
 
 		if *delay > 0 {
-			time.Sleep(time.Duration(*delay) * time.Microsecond)
+			time.Sleep(time.Duration(*delay) * time.Nanosecond)
 		}
 
 		if !*nowait && time.Since(start) > waitTime {
