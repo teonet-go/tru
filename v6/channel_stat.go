@@ -15,9 +15,18 @@ type ChannelStat struct {
 	drop       uint64 // Number of dropped received data packets
 }
 
+// init initializes channel statistics object. It starts speed calculation
+// processes. The ChannelStat object should be closed with close() method after
+// usage.
 func (ch *ChannelStat) init() {
 	ch.sentSpeed = NewSpeed()
 	ch.recvSpeed = NewSpeed()
+}
+
+// close closes channel statistics object.
+func (ch *ChannelStat) close() {
+	ch.sentSpeed.Close()
+	ch.recvSpeed.Close()
 }
 
 // Ack returns answer (acknowledgement) counter value

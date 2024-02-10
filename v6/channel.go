@@ -79,7 +79,9 @@ func newChannel(tru *Tru, conn net.PacketConn, addr string, close func()) (
 	ch.senddelay = 0 * time.Microsecond
 	ch.processChan = make(chan processChanData, 16)
 
-	go ch.process(tru, conn)
+	go ch.process(tru, conn, func() {
+		ch.Stat.close()
+	})
 	go ch.sq.process(conn, ch)
 	go ch.checkDisconnect(conn)
 
@@ -233,7 +235,7 @@ func (ch *Channel) checkDisconnect(conn net.PacketConn) {
 }
 
 // process gets received packets from processChan and process it
-func (ch *Channel) process(tru *Tru, conn net.PacketConn) (err error) {
+func (ch *Channel) process(tru *Tru, conn net.PacketConn, onClose func()) (err error) {
 
 	// writeToReadChannel func send data to read channel
 	writeToReadChannel := func(data []byte, wait bool) bool {
@@ -376,6 +378,9 @@ func (ch *Channel) process(tru *Tru, conn net.PacketConn) (err error) {
 
 	// Stop processing asks object
 	ask.close()
+
+	// Close channel callback
+	onClose()
 
 	return
 }

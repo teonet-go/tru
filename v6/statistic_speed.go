@@ -19,11 +19,24 @@ type Speed struct {
 	current int
 	speed   int
 	*sync.RWMutex
+	done chan bool
 }
 
-// NewSpeed creates new Speed object.
+// NewSpeed creates new Speed object and start calculate packets speed.
+// It should be closed after usage with Close() method.
 func NewSpeed() *Speed {
-	return &Speed{packets: make([]int, curent+1), RWMutex: new(sync.RWMutex)}
+	s := &Speed{
+		packets: make([]int, curent+1),
+		RWMutex: new(sync.RWMutex),
+		done:    make(chan bool),
+	}
+	go s.process()
+	return s
+}
+
+// Close closes speed object.
+func (s *Speed) Close() {
+	s.done <- true
 }
 
 // Speed returns packets per second.
@@ -33,8 +46,8 @@ func (s *Speed) Speed() int {
 	return s.speed
 }
 
-// Add adds one packet.
-func (s *Speed) Add() {
+// Add adds one packet or just tick to switch part of speed calculation.
+func (s *Speed) Add(tick ...any) {
 	s.Lock()
 	defer s.Unlock()
 
@@ -45,7 +58,9 @@ func (s *Speed) Add() {
 		s.speed = s.calculate()
 	}
 
-	s.packets[curent]++
+	if len(tick) == 0 {
+		s.packets[curent]++
+	}
 }
 
 // calculate calculate and returns packets per second.
@@ -56,4 +71,20 @@ func (s *Speed) calculate() (speed int) {
 	}
 
 	return
+}
+
+// process emulate adding packets to show real speed when packets are not sent.
+func (s *Speed) process() {
+	tick := time.NewTicker(time.Second / curent)
+	for {
+		select {
+		// Get done signal to stop this process
+		case <-s.done:
+			tick.Stop()
+			return
+		// Get tick signal to emulate adding packets in this period
+		case <-tick.C:
+			s.Add(nil)
+		}
+	}
 }
