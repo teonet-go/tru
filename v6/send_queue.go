@@ -161,7 +161,7 @@ func (sq *sendQueue) writeDelay(ch *Channel, id uint32) {
 
 	const (
 		sleepTime    = 100 * time.Microsecond
-		minSleepTime = 500 * time.Nanosecond
+		minSleepTime = 0 * time.Nanosecond // 500
 	)
 
 	midleDelay := func(d time.Duration) time.Duration {

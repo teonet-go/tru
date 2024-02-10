@@ -32,7 +32,7 @@ const (
 
 	// When claculate triptime uses ttCalcMiddle last packets to get middle
 	// triptime.
-	ttCalcMiddle = 10
+	// ttCalcMiddle = 10
 )
 
 var ErrChannelDoesNotExist = fmt.Errorf("channel does not exist")
