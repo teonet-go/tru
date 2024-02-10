@@ -168,6 +168,7 @@ func Sender(tru *tru.Tru, conn net.PacketConn, addr string) {
 			reader.ReadString('\n')
 
 			fmt.Print("\n\nsending packets ...\n\n")
+			tru.ResetStat()
 			start = time.Now()
 			i = -1
 		}

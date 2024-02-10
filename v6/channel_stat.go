@@ -29,6 +29,13 @@ func (ch *ChannelStat) close() {
 	ch.recvSpeed.Close()
 }
 
+// reset resets channel statistics.
+func (ch *ChannelStat) reset() { 
+	ch.close()
+	*ch = ChannelStat{}
+	ch.init()
+ }
+
 // Ack returns answer (acknowledgement) counter value
 func (ch *ChannelStat) Ack() uint64 { return atomic.LoadUint64(&ch.ack) }
 

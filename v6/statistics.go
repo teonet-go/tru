@@ -14,6 +14,14 @@ import (
 	"github.com/teonet-go/tru/v6/term"
 )
 
+// Reset resets statistics.
+func (tru *Tru) ResetStat() {
+	for chd := range tru.listChannels() {
+		chd.ch.Stat.reset()
+	}
+	tru.started = time.Now()
+}
+
 // Printstat prints tru statistics continuously
 func (tru *Tru) Printstat() {
 	tru.printstat()
@@ -45,8 +53,8 @@ func (tru *Tru) printstat() {
 				"%-17.17s %9d %7d %6d %12d %6d %12d %7d %6d %5d %5d %5d %7.4f %7.3f",
 				chd.addr, chd.ch.Stat.Sent(), chd.ch.Stat.SentSpeed(),
 				chd.ch.Stat.Retransmit(), chd.ch.Stat.Ack(),
-				chd.ch.Stat.Ackd(), 
-				chd.ch.Stat.Recv(), chd.ch.Stat.RecvSpeed(), 
+				chd.ch.Stat.Ackd(),
+				chd.ch.Stat.Recv(), chd.ch.Stat.RecvSpeed(),
 				chd.ch.Stat.Drop(), chd.ch.sq.len(),
 				chd.ch.rq.len(), 0,
 				float64(chd.ch.senddelay.Nanoseconds())/1000000.0,
