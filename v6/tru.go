@@ -107,8 +107,12 @@ func (tru *Tru) GetChannel(addr net.Addr) (*Channel, error) {
 	return ch, nil
 }
 
-// newChannel creates new Tru channel with addr or return existing
-func (tru *Tru) newChannel(conn net.PacketConn, addr net.Addr) (ch *Channel, err error) {
+// getChannel creates new Tru channel with addr or return existing.
+// It takes udp connection and addr as arguments and returns created or existing
+// channel and error.
+func (tru *Tru) getChannel(conn net.PacketConn, addr net.Addr) (ch *Channel,
+	err error) {
+
 	tru.Lock()
 	defer tru.Unlock()
 
@@ -130,7 +134,7 @@ func (tru *Tru) newChannel(conn net.PacketConn, addr net.Addr) (ch *Channel, err
 	return
 }
 
-// delChannel removes selected Tru channel or return error if does not exist
+// delChannel removes selected Tru channel or return error if does not exist.
 func (tru *Tru) delChannel(ch *Channel) error {
 	tru.Lock()
 	defer tru.Unlock()
@@ -147,7 +151,7 @@ func (tru *Tru) delChannel(ch *Channel) error {
 	return nil
 }
 
-// type channels chan channelsData
+// type channels chan channelsData.
 type channelsData struct {
 	addr string
 	ch   *Channel

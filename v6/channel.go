@@ -276,6 +276,10 @@ func (ch *Channel) process(tru *Tru, conn net.PacketConn) (err error) {
 		}
 	}
 
+	// New Ask object
+	ask := ch.newAsk(conn)
+
+	// Process received packets
 	for data := range ch.processChan {
 
 		// processReceiveQueue()
@@ -339,7 +343,8 @@ func (ch *Channel) process(tru *Tru, conn net.PacketConn) (err error) {
 			// Send answer
 			if processed {
 				data, _ := headerPacket{header.id, pAck}.MarshalBinary()
-				conn.WriteTo(data, ch.addr)
+				// conn.WriteTo(data, ch.addr)
+				ask.write(data)
 				ch.setLastdata()
 			}
 
@@ -349,12 +354,15 @@ func (ch *Channel) process(tru *Tru, conn net.PacketConn) (err error) {
 			// send queue
 			ch.setLastdata()
 
-			if pac, ok := ch.sq.del(header.id); ok {
-				ch.calcTriptime(pac)
-				ch.Stat.incAck()
-			} else {
-				ch.Stat.incAckd()
-			}
+			// Splits and process asks
+			ch.splitAsks(data, func(header *headerPacket) {
+				if pac, ok := ch.sq.del(header.id); ok {
+					ch.calcTriptime(pac)
+					ch.Stat.incAck()
+				} else {
+					ch.Stat.incAckd()
+				}
+			})
 
 		// Ping received
 		case pPing:
@@ -365,6 +373,9 @@ func (ch *Channel) process(tru *Tru, conn net.PacketConn) (err error) {
 		case pPong:
 		}
 	}
+
+	// Stop processing asks object
+	ask.close()
 
 	return
 }

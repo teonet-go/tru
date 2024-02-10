@@ -65,13 +65,12 @@ func main() {
 }
 
 // Create server connection and start listening
-func Create(tru *tru.Tru, ports ...int) (conn net.PacketConn, err error) {
+func Create(tru *tru.Tru, ports ...int) (net.PacketConn, error) {
 	var port int
 	if len(ports) > 0 {
 		port = ports[0]
 	}
-	conn, err = tru.ListenPacket("udp", fmt.Sprintf(":%d", port))
-	return
+	return tru.ListenPacket("udp", fmt.Sprintf(":%d", port))
 }
 
 // Listen to incoming udp packets

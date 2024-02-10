@@ -212,7 +212,7 @@ func (sq *sendQueue) writeDelay(ch *Channel, id uint32) {
 	ch.lastsendpac = time.Now()
 }
 
-// process send queue
+// process send queue.
 func (sq *sendQueue) process(conn net.PacketConn, ch *Channel) {
 	if ch.closed() {
 		// log.Printf("send queue process of channel %s stopped", ch.addr)

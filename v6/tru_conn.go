@@ -8,13 +8,13 @@ import (
 	"time"
 )
 
-// PacketConn is a generic tru network connection.
-//
-// Multiple goroutines may invoke methods on a PacketConn simultaneously.
+// PacketConn is a tru network connection. It stores the underlying
+// net.PacketConn, a pointer to the Tru instance, and a Mutex for
+// synchronization. It implements net.PacketConn interface to use in user code.
 type PacketConn struct {
-	conn net.PacketConn
-	tru  *Tru
-	*sync.Mutex
+	conn        net.PacketConn // UDP connection
+	tru         *Tru           // Pointer to Tru
+	*sync.Mutex                // Mutex
 }
 
 // ReadFrom reads a packet from the connection,
@@ -27,14 +27,29 @@ type PacketConn struct {
 // ReadFrom can be made to time out and return an error after a
 // fixed time limit; see SetDeadline and SetReadDeadline.
 func (c *PacketConn) ReadFrom(p []byte) (n int, addr net.Addr, err error) {
-	// Read processed message from read go channel
+	// Read processed message from read channel
 	r := <-c.tru.readChannel
 	addr, err = r.addr, r.err
 	n = copy(p, r.data)
 	return
 }
 
-// readFrom is reader worker
+// WriteTo writes a packet with payload p to addr.
+// WriteTo can be made to time out and return an Error after a
+// fixed time limit; see SetDeadline and SetWriteDeadline.
+// On packet-oriented connections, write timeouts are rare.
+func (c *PacketConn) WriteTo(p []byte, addr net.Addr) (n int, err error) {
+	return c.writeTo(p, addr, true)
+}
+
+func (c *PacketConn) Close() error                       { return c.conn.Close() } // TODO: test it - may be we need add tru channel close here.
+func (c *PacketConn) LocalAddr() net.Addr                { return c.conn.LocalAddr() }
+func (c *PacketConn) SetDeadline(t time.Time) error      { return c.conn.SetDeadline(t) }
+func (c *PacketConn) SetReadDeadline(t time.Time) error  { return c.conn.SetReadDeadline(t) }
+func (c *PacketConn) SetWriteDeadline(t time.Time) error { return c.conn.SetWriteDeadline(t) }
+
+// readFrom is reader worker. It reads data from udp connection and send it to
+// tru channels processChan channel.
 func (c *PacketConn) readFrom() (err error) {
 
 	log.Printf("reader started, addr: %s\n", c.conn.LocalAddr().String())
@@ -51,7 +66,7 @@ func (c *PacketConn) readFrom() (err error) {
 
 		// Get or create channel
 		var ch *Channel
-		ch, err = c.tru.newChannel(c.conn, addr)
+		ch, err = c.tru.getChannel(c.conn, addr)
 		if err != nil {
 			err = fmt.Errorf(errCantCreateChannel, err)
 			// TODO: print some message if can't create ot get channel?
@@ -64,8 +79,6 @@ func (c *PacketConn) readFrom() (err error) {
 				len(ch.processChan))
 			continue
 		}
-
-		// ch.processChan <- append([]byte{}, p[:n]...)
 	}
 }
 
@@ -80,21 +93,13 @@ func safeSend[T any](ch chan T, value T) (closed bool) {
 	return false
 }
 
-// WriteTo writes a packet with payload p to addr.
-// WriteTo can be made to time out and return an Error after a
-// fixed time limit; see SetDeadline and SetWriteDeadline.
-// On packet-oriented connections, write timeouts are rare.
-func (c *PacketConn) WriteTo(p []byte, addr net.Addr) (n int, err error) {
-	return c.writeTo(p, addr, true)
-}
-
 // writeTo writes with delay if wait is true or without delay.
 func (c *PacketConn) writeTo(p []byte, addr net.Addr, wait bool) (n int,
 	err error) {
 
 	// Get or create tru channel
 	var ch *Channel
-	ch, err = c.tru.newChannel(c.conn, addr)
+	ch, err = c.tru.getChannel(c.conn, addr)
 	if err != nil {
 		err = fmt.Errorf(errCantCreateChannel, err)
 		return
@@ -130,9 +135,3 @@ func WriteToNoWait(conn net.PacketConn, p []byte, addr net.Addr) (int, error) {
 	}
 	return c.writeTo(p, addr, false)
 }
-
-func (c *PacketConn) Close() error                       { return c.conn.Close() }
-func (c *PacketConn) LocalAddr() net.Addr                { return c.conn.LocalAddr() }
-func (c *PacketConn) SetDeadline(t time.Time) error      { return c.conn.SetDeadline(t) }
-func (c *PacketConn) SetReadDeadline(t time.Time) error  { return c.conn.SetReadDeadline(t) }
-func (c *PacketConn) SetWriteDeadline(t time.Time) error { return c.conn.SetWriteDeadline(t) }
