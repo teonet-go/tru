@@ -278,8 +278,8 @@ func (ch *Channel) process(tru *Tru, conn net.PacketConn, onClose func()) (err e
 		}
 	}
 
-	// New Ask object
-	ask := ch.newAsk(conn)
+	// New Ack object
+	ack := ch.newAck(conn)
 
 	// Process received packets
 	for data := range ch.processChan {
@@ -346,7 +346,7 @@ func (ch *Channel) process(tru *Tru, conn net.PacketConn, onClose func()) (err e
 			if processed {
 				data, _ := headerPacket{header.id, pAck}.MarshalBinary()
 				// conn.WriteTo(data, ch.addr)
-				ask.write(data)
+				ack.write(data)
 				ch.setLastdata()
 			}
 
@@ -356,8 +356,8 @@ func (ch *Channel) process(tru *Tru, conn net.PacketConn, onClose func()) (err e
 			// send queue
 			ch.setLastdata()
 
-			// Splits and process asks
-			ch.splitAsks(data, func(header *headerPacket) {
+			// Splits and process acks
+			ch.splitAcks(data, func(header *headerPacket) {
 				if pac, ok := ch.sq.del(header.id); ok {
 					ch.calcTriptime(pac)
 					ch.Stat.incAck()
@@ -376,8 +376,8 @@ func (ch *Channel) process(tru *Tru, conn net.PacketConn, onClose func()) (err e
 		}
 	}
 
-	// Stop processing asks object
-	ask.close()
+	// Stop processing acks object
+	ack.close()
 
 	// Close channel callback
 	onClose()

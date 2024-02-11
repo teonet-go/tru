@@ -29,6 +29,17 @@ const (
 	statusDisconnect // *** Not used in tru v6
 	statusPunch      // *** Not used in tru v6
 
+	// New in tru v6 (From here to "Split packet types")
+
+	// Combined answer to data packet (acknowledgement)
+	//
+	//	+--------------------+------+
+	//	| ID & STATUS uint32 | DATA |
+	//	+--------------------+------+
+	//	- ID - first Ack id From a continuous sequence & STATUS uint32: STATUS 1 byte | ID 3 byte
+	//  - DATA - last Ack id From a continuous sequence
+	pAcks
+
 	// Split packet types
 
 	statusSplit    = 0x80                // *** Not used in tru v6
