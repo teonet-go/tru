@@ -351,18 +351,20 @@ func (ch *Channel) process(tru *Tru, conn net.PacketConn, onClose func()) (err e
 			}
 
 		// Answer to data packet (acknowledgement) received
-		case pAck:
+		case pAck, pAcks:
 			// Save answer statistic, calculate triptime and remove package from
 			// send queue
 			ch.setLastdata()
 
 			// Splits and process acks
-			ch.splitAcks(data, func(header *headerPacket) {
-				if pac, ok := ch.sq.del(header.id); ok {
-					ch.calcTriptime(pac)
-					ch.Stat.incAck()
-				} else {
-					ch.Stat.incAckd()
+			ch.splitAcks(data, func(header *headerPacket, end *headerPacket) {
+				for id := header.id; id <= end.id; id++ {
+					if pac, ok := ch.sq.del(id); ok {
+						ch.calcTriptime(pac)
+						ch.Stat.incAck()
+					} else {
+						ch.Stat.incAckd()
+					}
 				}
 			})
 

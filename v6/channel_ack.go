@@ -95,12 +95,119 @@ next:
 	goto next
 }
 
-// combineAcks combines acks
-func (a *Ack) combineAcks(acks []byte, f func(*headerPacket)) {
+// combineAcks combines Ack status slice packet to Acks status packet.
+func (a *Ack) combineAcks(data []byte) (pacs [][]byte) {
 
+	// getNextId gets next id
+	getNextId := func(id uint32) uint32 {
+		id++
+		if !(id < packetIDLimit) {
+			id = 0
+		}
+		return uint32(id)
+	}
+
+	var startIdx int
+
+next:
+	// First id sets to max uint32 value before combining.
+	var firstId, lastId, nextId uint32 = ^uint32(0), ^uint32(0), 0
+
+	// The processed true mines than all ids in input data was added to the
+	// output packet.
+	var processed = true
+
+loop:
+	for idx := startIdx; idx < len(data); idx += headerLen {
+
+		header := &headerPacket{}
+		err := header.UnmarshalBinary(data[idx : idx+headerLen])
+		if err != nil {
+			// TODO: print some message if wrong header received?
+			continue
+		}
+		id := header.id
+
+		switch {
+
+		// Get first id
+		case firstId == ^uint32(0):
+			firstId = id
+
+		// Next id is in range
+		case id == nextId:
+
+		// End processing
+		default:
+			processed = false
+			startIdx = idx
+			break loop
+		}
+
+		// Set last id and next expected id
+		lastId = id
+		nextId = getNextId(id)
+	}
+
+	// All processed
+	if firstId == ^uint32(0) {
+		return
+	}
+
+	// Add ack or acks packet to result output
+	if lastId == firstId {
+		// Create ack packet
+		pacs = append(pacs, data[startIdx-headerLen:startIdx])
+	} else {
+		// Create acks packet
+		first, _ := headerPacket{uint32(firstId), pAcks}.MarshalBinary()
+		last, _ := headerPacket{uint32(lastId), pAcks}.MarshalBinary()
+		data := append(first, last...)
+		pacs = append(pacs, data)
+	}
+
+	// Continue processing
+	if !processed {
+		goto next
+	}
+
+	return
 }
 
-func (ch *Channel) splitAcks(data []byte, f func(*headerPacket)) {
+// acksToBytes combines Ack and Acks status packets to slices no longer than
+// acksLen (1024).
+func (a *Ack) acksToBytes(pacs [][]byte) (out [][]byte) {
+
+	outIdx := -1
+
+	nextOutIdx := func() {
+		out = append(out, make([]byte, 0, acksLen))
+		outIdx++
+	}
+	nextOutIdx()
+
+	for i := range pacs {
+		if len(out[outIdx])+len(pacs[i]) > acksLen {
+			nextOutIdx()
+		}
+		out[outIdx] = append(out[outIdx], pacs[i]...)
+	}
+
+	return
+}
+
+// acksToBytesLen calculates length of Ack and Acks status packets.
+func (a *Ack) acksToBytesLen(out [][]byte) (l int) {
+	for _, p := range out {
+		l += len(p)
+	}
+	return
+}
+
+// splitAcks splits input data to pAck or pAcks status packets and call f
+// callback function for each packet.
+func (ch *Channel) splitAcks(data []byte, f func(*headerPacket, *headerPacket)) {
+	var packetLen int
 	for idx := 0; idx < len(data); idx += headerLen {
 
 		header := &headerPacket{}
@@ -110,6 +217,20 @@ func (ch *Channel) splitAcks(data []byte, f func(*headerPacket)) {
 			continue
 		}
 
-		f(header)
+		end := header
+
+		packetLen = headerLen
+		if header.ptype == pAcks {
+			idx := idx + headerLen
+			header := &headerPacket{}
+			err := header.UnmarshalBinary(data[idx : idx+headerLen])
+			if err == nil {
+				end = header
+			}
+
+			packetLen += headerLen
+		}
+
+		f(header, end)
 	}
 }
