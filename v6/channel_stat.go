@@ -4,15 +4,16 @@ import "sync/atomic"
 
 // ChannelStat contains statistics data (atomic vars) and methods to work with it
 type ChannelStat struct {
-	sent       uint64 // Number of data packets sent
-	sentSpeed  *Speed // Number of data packets sent per second
-	ack        uint64 // Number of packets answer (acknowledgement) received
-	ackd       uint64 // Number of dropped packets answer (acknowledgement)
-	retransmit uint64 // Number of packets data retransmited
-	retrprev   uint64 // Previouse retransmits value
-	recv       uint64 // Number of data packets received
-	recvSpeed  *Speed // Number of data packets received per second
-	drop       uint64 // Number of dropped received data packets
+	sent            uint64 // Number of data packets sent
+	sentSpeed       *Speed // Number of data packets sent per second
+	ack             uint64 // Number of packets answer (acknowledgement) received
+	ackd            uint64 // Number of dropped packets answer (acknowledgement)
+	retransmit      uint64 // Number of packets data retransmited
+	retransmitSpeed *Speed // Number of data packets retransmit per second
+	retrprev        uint64 // Previouse retransmits value
+	recv            uint64 // Number of data packets received
+	recvSpeed       *Speed // Number of data packets received per second
+	drop            uint64 // Number of dropped received data packets
 }
 
 // init initializes channel statistics object. It starts speed calculation
@@ -21,20 +22,22 @@ type ChannelStat struct {
 func (ch *ChannelStat) init() {
 	ch.sentSpeed = NewSpeed()
 	ch.recvSpeed = NewSpeed()
+	ch.retransmitSpeed = NewSpeed()
 }
 
 // close closes channel statistics object.
 func (ch *ChannelStat) close() {
 	ch.sentSpeed.Close()
 	ch.recvSpeed.Close()
+	ch.retransmitSpeed.Close()
 }
 
 // reset resets channel statistics.
-func (ch *ChannelStat) reset() { 
+func (ch *ChannelStat) reset() {
 	ch.close()
 	*ch = ChannelStat{}
 	ch.init()
- }
+}
 
 // Ack returns answer (acknowledgement) counter value
 func (ch *ChannelStat) Ack() uint64 { return atomic.LoadUint64(&ch.ack) }
@@ -54,7 +57,8 @@ func (ch *ChannelStat) RecvSpeed() int { return ch.recvSpeed.Speed() }
 func (ch *ChannelStat) Drop() uint64 { return atomic.LoadUint64(&ch.drop) }
 
 // Retransmit returns retransmit counter value
-func (ch *ChannelStat) Retransmit() uint64 { return atomic.LoadUint64(&ch.retransmit) }
+func (ch *ChannelStat) Retransmit() uint64   { return atomic.LoadUint64(&ch.retransmit) }
+func (ch *ChannelStat) RetransmitSpeed() int { return ch.retransmitSpeed.Speed() }
 
 // incAck increments answers (acknowledgement) counter value
 func (ch *ChannelStat) incAck() { atomic.AddUint64(&ch.ack, 1) }
@@ -78,4 +82,7 @@ func (ch *ChannelStat) incRecv() {
 func (ch *ChannelStat) incDrop() { atomic.AddUint64(&ch.drop, 1) }
 
 // incAnswer increments retransmit counter value
-func (ch *ChannelStat) incRetransmit() { atomic.AddUint64(&ch.retransmit, 1) }
+func (ch *ChannelStat) incRetransmit() {
+	atomic.AddUint64(&ch.retransmit, 1)
+	ch.retransmitSpeed.Add()
+}

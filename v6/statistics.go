@@ -23,9 +23,7 @@ func (tru *Tru) ResetStat() {
 }
 
 // Printstat prints tru statistics continuously
-func (tru *Tru) Printstat() {
-	tru.printstat()
-}
+func (tru *Tru) Printstat() { tru.printstat() }
 
 func (tru *Tru) printstat() {
 
@@ -45,18 +43,18 @@ func (tru *Tru) printstat() {
 		//
 		var table string
 		var numRows = 0
-		l := term.Func.ClearLine() + strings.Repeat("-", 125)
+		l := term.Func.ClearLine() + strings.Repeat("-", 134)
 
 		for chd := range tru.listChannels() {
 			table += "\n"
 			table += term.Func.ClearLine() + fmt.Sprintf(
-				"%-17.17s %9d %7d %6d %12d %6d %12d %7d %6d %5d %5d %5d %7.4f %7.3f",
+				"%-17.17s %9d %7d %7d %6d %12d %6d %12d %7d %8d %5d %5d %5d %7.4f %7.3f",
 				chd.addr, chd.ch.Stat.Sent(), chd.ch.Stat.SentSpeed(),
-				chd.ch.Stat.Retransmit(), chd.ch.Stat.Ack(),
-				chd.ch.Stat.Ackd(),
+				chd.ch.Stat.Retransmit(), chd.ch.Stat.RetransmitSpeed(),
+				chd.ch.Stat.Ack(), chd.ch.Stat.Ackd(),
 				chd.ch.Stat.Recv(), chd.ch.Stat.RecvSpeed(),
-				chd.ch.Stat.Drop(), chd.ch.sq.len(),
-				chd.ch.rq.len(), 0,
+				chd.ch.Stat.Drop(),
+				chd.ch.sq.len(), chd.ch.rq.len(), 0,
 				float64(chd.ch.senddelay.Nanoseconds())/1000000.0,
 				float64(chd.ch.Triptime().Microseconds())/1000.0,
 			)
@@ -64,8 +62,8 @@ func (tru *Tru) printstat() {
 		}
 		if numRows > 0 {
 			title := "" +
-				"ADDR                   SEND    SSEC   RSND          ACK   ACKD" +
-				"         RECV    RSEC   DROP    SQ    RQ   RTA   DELAY      TT\n"
+				"ADDR                   SEND    SSEC    RSND   RSSE          ACK   ACKD" +
+				"         RECV    RSEC     DROP    SQ    RQ   RTA   DELAY      TT\n"
 			table = l + "\n" + title + l + table + "\n" + l
 			numRows += 4
 		} else {
