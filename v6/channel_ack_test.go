@@ -11,10 +11,11 @@ func TestAck(t *testing.T) {
 	ch := Channel{}
 	ack := ch.newAck(nil)
 
-	ackPacket := []byte{1, 2, 3, 4}
+	ackPacket := &headerPacket{uint32(1), pAck}
 
 	for i := 0; i < 256; i++ {
-		ack.write(ackPacket)
+		pac := &headerPacket{uint32(i), pAck}
+		ack.write(pac)
 	}
 
 	ack.write(ackPacket)
@@ -24,21 +25,17 @@ func TestAck(t *testing.T) {
 	ack.close()
 }
 
-type aPacks [][]byte
+type aPacks []*headerPacket
 
-func (a *aPacks) add(p []byte) { *a = append(*a, p) }
+func (a *aPacks) add(p *headerPacket) { *a = append(*a, p) }
 func (a *aPacks) bytes() (data []byte) {
 	for _, p := range *a {
-		data = append(data, p...)
+		d, _ := p.MarshalBinary()
+		data = append(data, d...)
 	}
 	return
 }
-func (a *aPacks) len() (l int) {
-	for _, p := range *a {
-		l += len(p)
-	}
-	return
-}
+func (a *aPacks) len() (l int) { return len(*a) * headerLen }
 
 func TestAckCombine(t *testing.T) {
 
@@ -51,19 +48,20 @@ func TestAckCombine(t *testing.T) {
 	// Combine 10 Ack packets data
 	numPacks := 100
 	for id := 0; id < numPacks; id++ {
-		data, _ := headerPacket{uint32(id), pAck}.MarshalBinary()
-		pacs.add(data)
+		p := &headerPacket{uint32(id), pAck}
+		pacs.add(p)
 		if id > 0 && (id%(numPacks/10) == 0) {
-			data, _ := headerPacket{uint32(id + numPacks), pAck}.MarshalBinary()
-			pacs.add(data)
+			p := &headerPacket{uint32(id + numPacks), pAck}
+			pacs.add(p)
 			// fmt.Println("ack packets data:", data)
 		}
 	}
-	fmt.Println("ack packets data len:", pacs.len(), pacs)
+	fmt.Println("ack packets" , len(pacs), "data len:", pacs.len())
 
+	ack.acks = pacs
 	res := ack.combine()
-	fmt.Println("\ngot result, len:", len(res), "data:", res)
+	for _, r := range res {
+		fmt.Println("\ngot result len:", len(r), "data:", r)
+	}
 
-	out := ack.acksToBytes(res)
-	fmt.Println("\ngot output, len:", ack.acksToBytesLen(out), "data:", out)
 }
