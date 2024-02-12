@@ -344,9 +344,10 @@ func (ch *Channel) process(tru *Tru, conn net.PacketConn, onClose func()) (err e
 
 			// Send answer
 			if processed {
-				data, _ := headerPacket{header.id, pAck}.MarshalBinary()
+				h := &headerPacket{header.id, pAck}
+				// data, _ := h.MarshalBinary()
 				// conn.WriteTo(data, ch.addr)
-				ack.write(data)
+				ack.write(h)
 				ch.setLastdata()
 			}
 
@@ -357,13 +358,24 @@ func (ch *Channel) process(tru *Tru, conn net.PacketConn, onClose func()) (err e
 			ch.setLastdata()
 
 			// Splits and process acks
-			ch.splitAcks(data, func(header *headerPacket, end *headerPacket) {
-				for id := header.id; id <= end.id; id++ {
+			ch.splitAcks(data, func(first *headerPacket, end *headerPacket) {
+				for id := first.id; ; {
+
 					if pac, ok := ch.sq.del(id); ok {
 						ch.calcTriptime(pac)
 						ch.Stat.incAck()
 					} else {
 						ch.Stat.incAckd()
+					}
+
+					// Process when packet id equals end packet id
+					if id == end.id {
+						break
+					}
+
+					// Get next id
+					if id++; id >= packetIDLimit {
+						id = 0
 					}
 				}
 			})

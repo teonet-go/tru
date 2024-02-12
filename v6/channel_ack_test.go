@@ -49,17 +49,19 @@ func TestAckCombine(t *testing.T) {
 	var pacs aPacks
 
 	// Combine 10 Ack packets data
-	numPacks := 1000
+	numPacks := 100
 	for id := 0; id < numPacks; id++ {
 		data, _ := headerPacket{uint32(id), pAck}.MarshalBinary()
 		pacs.add(data)
-		if id % (numPacks/10) == 0 { 
-			data, _ := headerPacket{uint32(id+numPacks), pAck}.MarshalBinary()
+		if id > 0 && (id%(numPacks/10) == 0) {
+			data, _ := headerPacket{uint32(id + numPacks), pAck}.MarshalBinary()
 			pacs.add(data)
+			// fmt.Println("ack packets data:", data)
 		}
 	}
-	fmt.Println("ack packets data len:", pacs.len()) 
-	res := ack.combineAcks(pacs.bytes())
+	fmt.Println("ack packets data len:", pacs.len(), pacs)
+
+	res := ack.combine()
 	fmt.Println("\ngot result, len:", len(res), "data:", res)
 
 	out := ack.acksToBytes(res)
